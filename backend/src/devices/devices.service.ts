@@ -29,6 +29,14 @@ import {
 
 export const OFFLINE_THRESHOLD_MS = 60 * 1000; // 60 seconds
 
+export interface DevicePresenceInfo {
+  id: number;
+  deviceUid: string;
+  name: string;
+  status: DeviceStatus;
+  lastSeenAt: Date | null;
+}
+
 @Injectable()
 export class DevicesService {
   constructor(
@@ -179,6 +187,24 @@ export class DevicesService {
     return this.attachComputedStatus(device);
   }
 
+  async findByRoomId(roomId: number): Promise<Device[]> {
+    await this.roomsService.findOne(roomId);
+
+    const devices = await this.prisma.device.findMany({
+      where: { roomId },
+      include: {
+        room: {
+          include: {
+            home: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return devices.map((d: Device) => this.attachComputedStatus(d));
+  }
+
   async findByDeviceUid(
     deviceUid: string,
   ): Promise<Device & { room: Room & { home: Home } }> {
@@ -259,13 +285,7 @@ export class DevicesService {
     return this.attachComputedStatus(updated);
   }
 
-  async getPresenceInfo(id: number): Promise<{
-    id: number;
-    deviceUid: string;
-    name: string;
-    status: DeviceStatus;
-    lastSeenAt: Date | null;
-  }> {
+  async getPresence(id: number): Promise<DevicePresenceInfo> {
     const device = await this.findOne(id);
     return {
       id: device.id,
@@ -274,6 +294,10 @@ export class DevicesService {
       status: device.status,
       lastSeenAt: device.lastSeenAt,
     };
+  }
+
+  async getPresenceInfo(id: number): Promise<DevicePresenceInfo> {
+    return this.getPresence(id);
   }
 
   async update(id: number, dto: UpdateDeviceDto): Promise<Device> {
