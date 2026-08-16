@@ -21,6 +21,22 @@ export class RoomsService {
         name: dto.name,
         homeId,
       },
+      include: {
+        devices: true,
+      },
+    });
+  }
+
+  async findAll(): Promise<Room[]> {
+    return this.prisma.room.findMany({
+      include: {
+        home: true,
+        devices: true,
+        _count: {
+          select: { devices: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
@@ -31,6 +47,7 @@ export class RoomsService {
     return this.prisma.room.findMany({
       where: { homeId },
       include: {
+        devices: true,
         _count: {
           select: { devices: true },
         },
@@ -58,10 +75,18 @@ export class RoomsService {
   async update(id: number, dto: UpdateRoomDto): Promise<Room> {
     await this.findOne(id);
 
+    if (dto.homeId) {
+      await this.homesService.findOne(dto.homeId);
+    }
+
     return this.prisma.room.update({
       where: { id },
       data: {
         name: dto.name,
+        ...(dto.homeId ? { homeId: dto.homeId } : {}),
+      },
+      include: {
+        devices: true,
       },
     });
   }

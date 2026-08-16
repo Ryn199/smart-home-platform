@@ -20,6 +20,13 @@ export class HomesService {
   async findAll(): Promise<Home[]> {
     return this.prisma.home.findMany({
       include: {
+        rooms: {
+          include: {
+            devices: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        automations: true,
         _count: {
           select: { rooms: true, automations: true },
         },
@@ -32,7 +39,13 @@ export class HomesService {
     const home = await this.prisma.home.findUnique({
       where: { id },
       include: {
-        rooms: true,
+        rooms: {
+          include: {
+            devices: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        automations: true,
       },
     });
 
@@ -49,6 +62,13 @@ export class HomesService {
     return this.prisma.home.update({
       where: { id },
       data: dto,
+      include: {
+        rooms: {
+          include: {
+            devices: true,
+          },
+        },
+      },
     });
   }
 

@@ -57,6 +57,17 @@ services:
       mosquitto:
         condition: service_healthy
 
+  web-admin:
+    build:
+      context: ./web-admin
+      dockerfile: Dockerfile
+    container_name: smarthome_web_admin
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
     driver: local

@@ -1,0 +1,455 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { devicesApi } from '../api/devices';
+import { homesApi } from '../api/homes';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { Device, DeviceCommand, DeviceType } from '../types';
+
+export const DevicesPage: React.FC = () => {
+  const queryClient = useQueryClient();
+  const [selectedType, setSelectedType] = useState<string>('ALL');
+  const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
+  const [deviceToDelete, setDeviceToDelete] = useState<Device | null>(null);
+  const [historyDeviceId, setHistoryDeviceId] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Form states
+  const [name, setName] = useState('');
+  const [deviceUid, setDeviceUid] = useState('');
+  const [deviceType, setDeviceType] = useState<DeviceType>('CUSTOM_SENSOR');
+  const [roomId, setRoomId] = useState<number>(1);
+
+  // Fetch homes to extract rooms
+  const { data: homes = [] } = useQuery({
+    queryKey: ['homes'],
+    queryFn: homesApi.getAll,
+  });
+
+  const allRooms = homes.flatMap((h) => (h.rooms || []).map((r) => ({ ...r, homeName: h.name })));
+
+  // Fetch devices
+  const { data: devices = [], isLoading } = useQuery({
+    queryKey: ['devices'],
+    queryFn: () => devicesApi.getAll(),
+  });
+
+  // Fetch command history if selected
+  const { data: commandHistory = [] } = useQuery({
+    queryKey: ['deviceCommands', historyDeviceId],
+    queryFn: () => (historyDeviceId ? devicesApi.getCommands(historyDeviceId) : []),
+    enabled: !!historyDeviceId,
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: devicesApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      closeModal();
+    },
+    onError: (err: any) => {
+      setErrorMessage(err?.message || 'Failed to register device');
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { name?: string; roomId?: number } }) =>
+      devicesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      closeModal();
+    },
+    onError: (err: any) => {
+      setErrorMessage(err?.message || 'Failed to update device');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: devicesApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      setDeviceToDelete(null);
+    },
+    onError: (err: any) => {
+      setErrorMessage(`Delete failed: ${err?.message || 'Unknown error'}`);
+      setDeviceToDelete(null);
+    },
+  });
+
+  const openCreateModal = () => {
+    setEditingDevice(null);
+    setName('');
+    setDeviceUid('');
+    setDeviceType('CUSTOM_SENSOR');
+    if (allRooms.length > 0) setRoomId(allRooms[0].id);
+    setErrorMessage(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (device: Device) => {
+    setEditingDevice(device);
+    setName(device.name);
+    setDeviceUid(device.deviceUid);
+    setDeviceType(device.deviceType);
+    setRoomId(device.roomId);
+    setErrorMessage(null);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingDevice(null);
+    setName('');
+    setDeviceUid('');
+    setErrorMessage(null);
+  };
+
+  const filteredDevices = devices.filter((d) => {
+    if (selectedType !== 'ALL' && d.deviceType !== selectedType) return false;
+    if (selectedStatus !== 'ALL' && d.status !== selectedStatus) return false;
+    return true;
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    if (editingDevice) {
+      updateMutation.mutate({
+        id: editingDevice.id,
+        data: { name: name.trim(), roomId },
+      });
+    } else {
+      if (!deviceUid.trim()) return;
+      registerMutation.mutate({
+        name: name.trim(),
+        deviceUid: deviceUid.trim(),
+        deviceType,
+        roomId,
+      });
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (deviceToDelete) {
+      deleteMutation.mutate(deviceToDelete.id);
+    }
+  };
+
+  return (
+    <div className="space-y-lg">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="font-headline-lg text-headline-lg text-on-surface font-bold">
+            Devices Inventory
+          </h2>
+          <p className="text-sm text-on-surface-variant">
+            Register and manage ESP32 nodes and smart appliances.
+          </p>
+        </div>
+        <button
+          onClick={openCreateModal}
+          className="flex items-center gap-xs px-4 py-2 bg-primary text-on-primary font-body-md rounded-lg hover:bg-primary/90 transition-colors shadow-sm cursor-pointer active:scale-98"
+        >
+          <span className="material-symbols-outlined text-[20px]">add</span>
+          Register Device
+        </button>
+      </div>
+
+      {/* Filter Toolbar */}
+      <div className="flex flex-wrap items-center gap-md p-md bg-surface border border-outline-variant rounded-xl shadow-sm">
+        <div className="flex items-center gap-sm">
+          <span className="text-xs font-semibold text-on-surface-variant uppercase">
+            Type:
+          </span>
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-sm focus:outline-none"
+          >
+            <option value="ALL">All Device Types</option>
+            <option value="CUSTOM_SENSOR">Custom Sensor</option>
+            <option value="SMART_DOOR">Smart Door</option>
+            <option value="SMART_CURTAIN">Smart Curtain</option>
+            <option value="EXHAUST_FAN">Exhaust Fan</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-sm">
+          <span className="text-xs font-semibold text-on-surface-variant uppercase">
+            Status:
+          </span>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-sm focus:outline-none"
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="ONLINE">Online</option>
+            <option value="OFFLINE">Offline</option>
+            <option value="UNKNOWN">Unknown</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Table of Devices */}
+      <div className="bg-surface border border-outline-variant rounded-xl overflow-hidden shadow-sm shadow-black/5">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-surface-container-low border-b border-outline-variant text-on-surface-variant font-label-caps text-label-caps uppercase">
+              <tr>
+                <th className="px-lg py-md">Device Name</th>
+                <th className="px-lg py-md">UID</th>
+                <th className="px-lg py-md">Type</th>
+                <th className="px-lg py-md">Room</th>
+                <th className="px-lg py-md">Presence</th>
+                <th className="px-lg py-md text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-outline-variant/60">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-lg py-xl text-center text-outline">
+                    Loading devices...
+                  </td>
+                </tr>
+              ) : filteredDevices.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-lg py-xl text-center text-outline">
+                    No devices match the selected filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredDevices.map((device: Device) => (
+                  <tr key={device.id} className="hover:bg-surface-container-low/50">
+                    <td className="px-lg py-md font-semibold text-on-surface">
+                      {device.name}
+                    </td>
+                    <td className="px-lg py-md font-data-mono text-outline">
+                      {device.deviceUid}
+                    </td>
+                    <td className="px-lg py-md">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-container-highest text-on-surface-variant">
+                        {device.deviceType}
+                      </span>
+                    </td>
+                    <td className="px-lg py-md text-on-surface-variant">
+                      {device.room?.name || `Room #${device.roomId}`}
+                    </td>
+                    <td className="px-lg py-md">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          device.status === 'ONLINE'
+                            ? 'text-[#059669] bg-[#ecfdf5]'
+                            : 'text-error bg-error-container/40'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            device.status === 'ONLINE'
+                              ? 'bg-[#10b981] animate-pulse'
+                              : 'bg-error'
+                          }`}
+                        />
+                        {device.status}
+                      </span>
+                    </td>
+                    <td className="px-lg py-md text-right space-x-1">
+                      <button
+                        onClick={() => setHistoryDeviceId(device.id)}
+                        className="text-primary hover:underline font-semibold text-xs px-2 py-1 cursor-pointer"
+                      >
+                        History
+                      </button>
+                      <button
+                        onClick={() => openEditModal(device)}
+                        className="text-on-surface-variant hover:text-primary hover:bg-surface-container-high p-1 rounded transition-colors cursor-pointer"
+                        title="Edit Device"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          edit
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setDeviceToDelete(device)}
+                        className="text-error hover:bg-error-container/20 p-1 rounded transition-colors cursor-pointer"
+                        title="Delete Device"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          delete
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Register / Edit Device Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface border border-outline-variant rounded-xl p-lg max-w-md w-full shadow-lg space-y-md animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="font-headline-md text-headline-md text-on-surface font-semibold">
+              {editingDevice ? 'Edit Device' : 'Register New Device'}
+            </h3>
+
+            {errorMessage && (
+              <div className="p-2.5 bg-error-container/40 border border-error/20 rounded-lg text-error text-xs">
+                {errorMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-md">
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-variant uppercase mb-1">
+                  Device Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Front Door, Kitchen Fan, Climate Sensor"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-variant uppercase mb-1">
+                  Device Unique Identifier (UID) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  disabled={!!editingDevice}
+                  placeholder="e.g. door-001, sensor-001, fan-001"
+                  value={deviceUid}
+                  onChange={(e) => setDeviceUid(e.target.value)}
+                  className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm font-data-mono disabled:opacity-50 disabled:bg-surface-container-low"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-variant uppercase mb-1">
+                  Device Type
+                </label>
+                <select
+                  disabled={!!editingDevice}
+                  value={deviceType}
+                  onChange={(e) => setDeviceType(e.target.value as DeviceType)}
+                  className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm disabled:opacity-50 disabled:bg-surface-container-low"
+                >
+                  <option value="CUSTOM_SENSOR">CUSTOM_SENSOR (Telemetry Readings)</option>
+                  <option value="SMART_DOOR">SMART_DOOR (Lock/Unlock)</option>
+                  <option value="SMART_CURTAIN">SMART_CURTAIN (Motor Position)</option>
+                  <option value="EXHAUST_FAN">EXHAUST_FAN (Speed & Power)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-variant uppercase mb-1">
+                  Assign Room *
+                </label>
+                <select
+                  value={roomId}
+                  onChange={(e) => setRoomId(parseInt(e.target.value, 10))}
+                  className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm"
+                >
+                  {allRooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name} ({r.homeName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-sm pt-sm">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-4 py-2 border border-outline-variant rounded-lg text-sm hover:bg-surface-container-low cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={registerMutation.isPending || updateMutation.isPending}
+                  className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+                >
+                  {registerMutation.isPending || updateMutation.isPending
+                    ? 'Saving...'
+                    : editingDevice
+                      ? 'Update Device'
+                      : 'Register'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Command History Modal */}
+      {historyDeviceId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface border border-outline-variant rounded-xl p-lg max-w-lg w-full shadow-lg space-y-md max-h-[80vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-outline-variant pb-sm">
+              <h3 className="font-headline-md text-headline-md text-on-surface font-semibold">
+                Command Execution History
+              </h3>
+              <button
+                onClick={() => setHistoryDeviceId(null)}
+                className="text-outline hover:text-on-surface cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-sm">
+              {commandHistory.length === 0 ? (
+                <p className="text-center py-lg text-outline text-sm">
+                  No commands recorded for this device yet.
+                </p>
+              ) : (
+                commandHistory.map((cmd: DeviceCommand) => (
+                  <div
+                    key={cmd.id}
+                    className="p-md bg-surface-container-low rounded-lg border border-outline-variant flex justify-between items-center text-sm"
+                  >
+                    <div>
+                      <span className="font-bold text-on-surface uppercase font-data-mono">
+                        {cmd.command}
+                      </span>
+                      <p className="text-xs text-outline">
+                        {new Date(cmd.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-primary-fixed-dim/40 text-primary">
+                      {cmd.status}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deviceToDelete}
+        title="Delete Device"
+        message={`Are you sure you want to delete device "${deviceToDelete?.name}" (${deviceToDelete?.deviceUid})?`}
+        confirmLabel="Yes, Delete Device"
+        isDestructive={true}
+        isLoading={deleteMutation.isPending}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeviceToDelete(null)}
+      />
+    </div>
+  );
+};

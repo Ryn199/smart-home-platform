@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Smart Home Overview</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed-dim": "#c3c0ff",
+                        "surface-bright": "#fbf8ff",
+                        "on-secondary-container": "#fffbff",
+                        "on-tertiary-container": "#ffa583",
+                        "outline-variant": "#c4c5d5",
+                        "inverse-surface": "#2f3037",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "outline": "#757684",
+                        "surface-container-highest": "#e3e1eb",
+                        "surface-dim": "#dad9e3",
+                        "on-primary-fixed": "#001453",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#100069",
+                        "on-background": "#1a1b22",
+                        "surface-container-high": "#e8e7f1",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed": "#ffdbce",
+                        "background": "#fbf8ff",
+                        "secondary": "#4e45d5",
+                        "on-primary-fixed-variant": "#173bab",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#872d00",
+                        "surface-tint": "#3755c3",
+                        "secondary-container": "#6860ef",
+                        "primary-fixed-dim": "#b8c4ff",
+                        "surface-container-low": "#f4f2fc",
+                        "surface": "#fbf8ff",
+                        "primary-fixed": "#dde1ff",
+                        "surface-variant": "#e3e1eb",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed-variant": "#802a00",
+                        "on-surface-variant": "#444653",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#380d00",
+                        "inverse-on-surface": "#f1f0fa",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed": "#e3dfff",
+                        "primary-container": "#1e40af",
+                        "tertiary": "#611e00",
+                        "inverse-primary": "#b8c4ff",
+                        "on-primary": "#ffffff",
+                        "primary": "#00288e",
+                        "on-primary-container": "#a8b8ff",
+                        "surface-container": "#eeedf7",
+                        "on-surface": "#1a1b22",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed-variant": "#372abf"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sidebar-width": "260px",
+                        "unit": "4px",
+                        "gutter": "20px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "sm": "8px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "data-mono": ["JetBrains Mono"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "display-stat": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-caps": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["18px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "data-mono": ["13px", { "lineHeight": "18px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-stat": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+
+<body class="bg-surface text-on-surface font-body-md h-screen overflow-hidden flex font-sans antialiased">
+    <!-- SideNavBar -->
+    <aside
+        class="w-sidebar-width h-screen border-r border-outline-variant bg-surface flex flex-col fixed left-0 top-0 z-20">
+        <div class="p-lg border-b border-outline-variant flex items-center gap-md">
+            <span class="material-symbols-outlined text-primary"
+                style="font-size: 32px; font-variation-settings: 'FILL' 1;">smart_toy</span>
+            <div>
+                <h1 class="font-headline-md text-headline-md text-primary font-bold">Admin Panel</h1>
+                <p class="font-label-caps text-label-caps text-on-surface-variant">Smart Home v2.4</p>
+            </div>
+        </div>
+        <nav class="flex-1 py-md overflow-y-auto">
+            <ul class="flex flex-col">
+                <!-- Overview (Active) -->
+                <li>
+                    <a class="flex items-center gap-md bg-secondary-container/10 border-l-[3px] border-primary text-primary font-bold py-3 px-lg cursor-pointer transition-all duration-150"
+                        href="#">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        Overview
+                    </a>
+                </li>
+                <!-- Homes -->
+                <li>
+                    <a class="flex items-center gap-md text-on-surface-variant py-3 px-lg hover:bg-surface-container-low transition-colors cursor-pointer active:scale-98 transition-all duration-150"
+                        href="#">
+                        <span class="material-symbols-outlined">home</span>
+                        Homes
+                    </a>
+                </li>
+                <!-- Rooms -->
+                <li>
+                    <a class="flex items-center gap-md text-on-surface-variant py-3 px-lg hover:bg-surface-container-low transition-colors cursor-pointer active:scale-98 transition-all duration-150"
+                        href="#">
+                        <span class="material-symbols-outlined">grid_view</span>
+                        Rooms
+                    </a>
+                </li>
+                <!-- Devices -->
+                <li>
+                    <a class="flex items-center gap-md text-on-surface-variant py-3 px-lg hover:bg-surface-container-low transition-colors cursor-pointer active:scale-98 transition-all duration-150"
+                        href="#">
+                        <span class="material-symbols-outlined">devices</span>
+                        Devices
+                    </a>
+                </li>
+                <!-- Sensors -->
+                <li>
+                    <a class="flex items-center gap-md text-on-surface-variant py-3 px-lg hover:bg-surface-container-low transition-colors cursor-pointer active:scale-98 transition-all duration-150"
+                        href="#">
+                        <span class="material-symbols-outlined">sensors</span>
+                        Sensors
+                    </a>
+                </li>
+                <!-- Automations -->
+                <li>
+                    <a class="flex items-center gap-md text-on-surface-variant py-3 px-lg hover:bg-surface-container-low transition-colors cursor-pointer active:scale-98 transition-all duration-150"
+                        href="#">
+                        <span class="material-symbols-outlined">auto_mode</span>
+                        Automations
+                    </a>
+                </li>
+                <!-- Settings -->
+                <li>
+                    <a class="flex items-center gap-md text-on-surface-variant py-3 px-lg hover:bg-surface-container-low transition-colors cursor-pointer active:scale-98 transition-all duration-150"
+                        href="#">
+                        <span class="material-symbols-outlined">settings</span>
+                        Settings
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <div class="border-t border-outline-variant p-md">
+            <ul class="flex flex-col">
+                <li>
+                    <a class="flex items-center gap-md text-on-surface-variant py-3 px-lg hover:bg-surface-container-low transition-colors cursor-pointer active:scale-98 transition-all duration-150"
+                        href="#">
+                        <span class="material-symbols-outlined">account_circle</span>
+                        Profile
+                    </a>
+                </li>
+                <li>
+                    <a class="flex items-center gap-md text-on-surface-variant py-3 px-lg hover:bg-surface-container-low transition-colors cursor-pointer active:scale-98 transition-all duration-150"
+                        href="#">
+                        <span class="material-symbols-outlined">logout</span>
+                        Logout
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </aside>
+    <!-- Main Content Wrapper -->
+    <div class="ml-sidebar-width flex-1 flex flex-col h-full bg-surface-container-lowest">
+        <!-- TopAppBar -->
+        <header
+            class="h-20 w-full border-b border-outline-variant bg-surface-bright flex justify-between items-center px-lg py-md z-10">
+            <div class="flex items-center gap-md">
+                <span class="font-headline-md text-headline-md font-semibold text-on-surface">Smart Home Overview</span>
+            </div>
+            <div class="flex items-center gap-lg">
+                <div class="hidden md:flex items-center gap-sm font-label-caps text-label-caps">
+                    <a class="text-on-surface-variant hover:text-primary transition-all duration-200" href="#">Smart
+                        Home</a>
+                    <span class="text-outline-variant">/</span>
+                    <a class="text-primary font-semibold transition-all duration-200" href="#">Overview</a>
+                </div>
+                <div class="flex items-center gap-md text-on-surface-variant">
+                    <button class="hover:text-primary transition-colors cursor-pointer">
+                        <span class="material-symbols-outlined">notifications</span>
+                    </button>
+                    <button class="hover:text-primary transition-colors cursor-pointer">
+                        <span class="material-symbols-outlined">account_circle</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+        <!-- Scrollable Canvas -->
+        <main class="flex-1 overflow-y-auto p-lg lg:p-xl space-y-lg max-w-[1440px] mx-auto w-full">
+            <!-- 1. Summary Stats -->
+            <section class="grid grid-cols-2 md:grid-cols-4 gap-md">
+                <!-- Homes -->
+                <div class="bg-surface border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                    <div class="flex justify-between items-start text-on-surface-variant">
+                        <span class="font-label-caps text-label-caps">Homes</span>
+                        <span class="material-symbols-outlined text-outline">home</span>
+                    </div>
+                    <div class="font-display-stat text-display-stat text-on-surface">2</div>
+                </div>
+                <!-- Rooms -->
+                <div class="bg-surface border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                    <div class="flex justify-between items-start text-on-surface-variant">
+                        <span class="font-label-caps text-label-caps">Rooms</span>
+                        <span class="material-symbols-outlined text-outline">grid_view</span>
+                    </div>
+                    <div class="font-display-stat text-display-stat text-on-surface">6</div>
+                </div>
+                <!-- Devices -->
+                <div class="bg-surface border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                    <div class="flex justify-between items-start text-on-surface-variant">
+                        <span class="font-label-caps text-label-caps">Devices</span>
+                        <span class="material-symbols-outlined text-outline">devices</span>
+                    </div>
+                    <div class="font-display-stat text-display-stat text-on-surface">8</div>
+                </div>
+                <!-- Online -->
+                <div class="bg-surface border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                    <div class="flex justify-between items-start text-on-surface-variant">
+                        <span class="font-label-caps text-label-caps">Online</span>
+                        <div
+                            class="flex items-center gap-xs text-[10px] uppercase font-bold text-[#059669] bg-[#ecfdf5] px-2 py-0.5 rounded-full">
+                            <span class="w-1.5 h-1.5 rounded-full bg-[#10b981] animate-pulse"></span>
+                            Healthy
+                        </div>
+                    </div>
+                    <div class="font-display-stat text-display-stat text-on-surface">7<span
+                            class="text-headline-lg text-on-surface-variant">/8</span></div>
+                </div>
+            </section>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-lg">
+                <!-- Left/Main Column (Room Selector & Device Grid) -->
+                <div class="lg:col-span-8 xl:col-span-9 space-y-lg">
+                    <!-- 2. Room Selector -->
+                    <section
+                        class="flex items-center gap-md overflow-x-auto pb-sm no-scrollbar border-b border-outline-variant/50">
+                        <span class="font-label-caps text-label-caps text-on-surface-variant whitespace-nowrap">Main
+                            House:</span>
+                        <button
+                            class="bg-primary text-on-primary font-body-md text-body-md px-4 py-1.5 rounded-full whitespace-nowrap border border-primary transition-colors">Living
+                            Room</button>
+                        <button
+                            class="bg-surface-container-low text-on-surface-variant hover:bg-surface-container-highest font-body-md text-body-md px-4 py-1.5 rounded-full whitespace-nowrap border border-outline-variant transition-colors cursor-pointer">Bedroom</button>
+                        <button
+                            class="bg-surface-container-low text-on-surface-variant hover:bg-surface-container-highest font-body-md text-body-md px-4 py-1.5 rounded-full whitespace-nowrap border border-outline-variant transition-colors cursor-pointer">Kitchen</button>
+                        <button
+                            class="bg-surface-container-low text-on-surface-variant hover:bg-surface-container-highest font-body-md text-body-md px-4 py-1.5 rounded-full whitespace-nowrap border border-outline-variant transition-colors cursor-pointer">Garage</button>
+                    </section>
+                    <!-- 3. Device Grid -->
+                    <section class="grid grid-cols-1 md:grid-cols-2 gap-md">
+                        <!-- Smart Door -->
+                        <div
+                            class="bg-surface border border-outline-variant rounded-xl p-md flex flex-col justify-between min-h-[160px] group hover:border-outline transition-colors shadow-sm shadow-black/5">
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center gap-sm">
+                                    <span class="material-symbols-outlined text-on-surface-variant">door_front</span>
+                                    <h3 class="font-body-lg text-body-lg font-medium">Front Door</h3>
+                                </div>
+                                <div
+                                    class="flex items-center gap-xs font-label-caps text-label-caps text-[#059669] bg-[#ecfdf5] px-2 py-0.5 rounded-full">
+                                    <span class="material-symbols-outlined text-[14px]">lock</span>
+                                    Locked
+                                </div>
+                            </div>
+                            <div class="mt-lg">
+                                <button
+                                    class="w-full py-2 bg-surface-container-low hover:bg-surface-container-highest text-on-surface font-body-md text-body-md rounded-lg border border-outline-variant transition-colors flex items-center justify-center gap-sm cursor-pointer active:scale-98">
+                                    <span class="material-symbols-outlined text-[18px]">lock_open</span>
+                                    Unlock
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Smart Curtain -->
+                        <div
+                            class="bg-surface border border-outline-variant rounded-xl p-md flex flex-col justify-between min-h-[160px] group hover:border-outline transition-colors shadow-sm shadow-black/5">
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center gap-sm">
+                                    <span class="material-symbols-outlined text-on-surface-variant">blinds</span>
+                                    <h3 class="font-body-lg text-body-lg font-medium">Living Room Window</h3>
+                                </div>
+                                <span class="font-data-mono text-data-mono text-primary">72%</span>
+                            </div>
+                            <div class="mt-lg flex flex-col gap-sm">
+                                <div class="w-full h-1 bg-surface-container-highest rounded-full relative">
+                                    <div class="absolute left-0 top-0 h-full bg-primary rounded-full"
+                                        style="width: 72%;"></div>
+                                    <div class="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-pointer shadow-sm"
+                                        style="left: 72%; transform: translate(-50%, -50%);"></div>
+                                </div>
+                                <div
+                                    class="flex justify-between font-label-caps text-label-caps text-outline-variant mt-1">
+                                    <span>Closed</span>
+                                    <span>Open</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Exhaust Fan -->
+                        <div
+                            class="bg-surface border border-outline-variant rounded-xl p-md flex flex-col justify-between min-h-[160px] group hover:border-outline transition-colors shadow-sm shadow-black/5">
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center gap-sm">
+                                    <span class="material-symbols-outlined text-on-surface-variant">mode_fan</span>
+                                    <h3 class="font-body-lg text-body-lg font-medium">Kitchen Fan</h3>
+                                </div>
+                                <div
+                                    class="flex items-center gap-xs font-label-caps text-label-caps text-primary bg-primary-fixed-dim/30 px-2 py-0.5 rounded-full">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                    Running
+                                </div>
+                            </div>
+                            <div class="mt-lg flex items-center justify-between">
+                                <div
+                                    class="flex items-center gap-sm font-data-mono text-data-mono text-on-surface-variant">
+                                    <span class="material-symbols-outlined text-[16px]">speed</span>
+                                    Speed: 2
+                                </div>
+                                <!-- Toggle Pill -->
+                                <button
+                                    class="w-12 h-6 rounded-full bg-primary relative cursor-pointer active:scale-95 transition-transform">
+                                    <div class="absolute right-1 top-1 w-4 h-4 rounded-full bg-white shadow-sm"></div>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Sensor Card -->
+                        <div
+                            class="bg-surface border border-outline-variant rounded-xl p-md flex flex-col justify-between min-h-[160px] group hover:border-outline transition-colors shadow-sm shadow-black/5 relative overflow-hidden">
+                            <div class="flex justify-between items-start z-10 relative">
+                                <div class="flex items-center gap-sm">
+                                    <span class="material-symbols-outlined text-on-surface-variant">thermostat</span>
+                                    <h3 class="font-body-lg text-body-lg font-medium">Climate Monitor</h3>
+                                </div>
+                            </div>
+                            <div class="mt-md flex gap-md z-10 relative">
+                                <div>
+                                    <span
+                                        class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Temp</span>
+                                    <span class="font-headline-lg text-headline-lg text-on-surface">28.4°C</span>
+                                </div>
+                                <div>
+                                    <span
+                                        class="font-label-caps text-label-caps text-on-surface-variant block mb-1">Humidity</span>
+                                    <span class="font-headline-lg text-headline-lg text-on-surface">72%</span>
+                                </div>
+                            </div>
+                            <!-- Simple Sparkline SVG -->
+                            <div class="absolute bottom-0 left-0 w-full h-12 opacity-40 pointer-events-none">
+                                <svg class="w-full h-full stroke-primary fill-none" preserveaspectratio="none"
+                                    stroke-width="1.5" viewbox="0 0 100 20">
+                                    <path d="M0,15 L10,12 L20,16 L30,8 L40,10 L50,4 L60,8 L70,2 L80,6 L90,1 L100,5">
+                                    </path>
+                                </svg>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+                <!-- Right Column (Recent Activity) -->
+                <div class="lg:col-span-4 xl:col-span-3">
+                    <div
+                        class="bg-surface border border-outline-variant rounded-xl flex flex-col h-full overflow-hidden shadow-sm shadow-black/5">
+                        <div
+                            class="p-md border-b border-outline-variant flex items-center justify-between bg-surface-bright">
+                            <h2 class="font-headline-md text-headline-md text-on-surface">Recent Activity</h2>
+                            <span class="material-symbols-outlined text-outline-variant text-[20px]">history</span>
+                        </div>
+                        <div class="p-md flex-1 overflow-y-auto">
+                            <ul
+                                class="space-y-4 relative before:absolute before:inset-y-0 before:left-[11px] before:w-px before:bg-outline-variant/50 ml-1">
+                                <!-- Event 1 -->
+                                <li class="relative pl-6">
+                                    <div
+                                        class="absolute left-[-5px] top-1 w-2 h-2 rounded-full bg-outline-variant border-2 border-surface">
+                                    </div>
+                                    <p class="font-body-md text-body-md text-on-surface">Smart Door unlocked</p>
+                                    <span class="font-label-caps text-label-caps text-outline-variant">2m ago</span>
+                                </li>
+                                <!-- Event 2 -->
+                                <li class="relative pl-6">
+                                    <div
+                                        class="absolute left-[-5px] top-1 w-2 h-2 rounded-full bg-outline-variant border-2 border-surface">
+                                    </div>
+                                    <p class="font-body-md text-body-md text-on-surface">Temp sensor updated</p>
+                                    <span class="font-label-caps text-label-caps text-outline-variant">3m ago</span>
+                                </li>
+                                <!-- Event 3 -->
+                                <li class="relative pl-6">
+                                    <div
+                                        class="absolute left-[-5px] top-1 w-2 h-2 rounded-full bg-outline-variant border-2 border-surface">
+                                    </div>
+                                    <p class="font-body-md text-body-md text-on-surface">Kitchen Fan turned on</p>
+                                    <span class="font-label-caps text-label-caps text-outline-variant">15m ago</span>
+                                </li>
+                                <!-- Event 4 -->
+                                <li class="relative pl-6">
+                                    <div
+                                        class="absolute left-[-5px] top-1 w-2 h-2 rounded-full bg-outline-variant border-2 border-surface">
+                                    </div>
+                                    <p class="font-body-md text-body-md text-on-surface">Living Room Window closed</p>
+                                    <span class="font-label-caps text-label-caps text-outline-variant">1h ago</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>
