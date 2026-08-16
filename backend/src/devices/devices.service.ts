@@ -1,16 +1,51 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { RoomsService } from '../rooms/rooms.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { Device, DeviceStatus, DeviceType, Prisma } from '@prisma/client';
 
+export interface DevicePresenceInfo {
+  id: number;
+  deviceUid: string;
+  name: string;
+  status: DeviceStatus;
+  lastSeenAt: Date | null;
+  thresholdSeconds: number;
+  secondsSinceLastSeen: number | null;
+}
+
 @Injectable()
 export class DevicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly roomsService: RoomsService,
+    private readonly configService: ConfigService,
   ) {}
+
+  getOfflineThresholdSeconds(): number {
+    const raw = this.configService.get<string | number>('DEVICE_OFFLINE_THRESHOLD_SECONDS', 60);
+    return typeof raw === 'number' ? raw : parseInt(String(raw), 10) || 60;
+  }
+
+  calculateStatus(lastSeenAt: Date | null): DeviceStatus {
+    if (!lastSeenAt) {
+      return DeviceStatus.UNKNOWN;
+    }
+
+    const diffMs = Date.now() - new Date(lastSeenAt).getTime();
+    const thresholdMs = this.getOfflineThresholdSeconds() * 1000;
+
+    return diffMs <= thresholdMs ? DeviceStatus.ONLINE : DeviceStatus.OFFLINE;
+  }
+
+  private attachComputedStatus<T extends Device>(device: T): T {
+    return {
+      ...device,
+      status: this.calculateStatus(device.lastSeenAt),
+    };
+  }
 
   async create(dto: CreateDeviceDto): Promise<Device> {
     // 1. Validate room exists
@@ -26,7 +61,7 @@ export class DevicesService {
     }
 
     // 3. Create device
-    return this.prisma.device.create({
+    const device = await this.prisma.device.create({
       data: {
         roomId: dto.roomId,
         name: dto.name,
@@ -43,9 +78,15 @@ export class DevicesService {
         },
       },
     });
+
+    return this.attachComputedStatus(device);
   }
 
-  async findAll(filter?: { roomId?: number; deviceType?: DeviceType }): Promise<Device[]> {
+  async findAll(filter?: {
+    roomId?: number;
+    deviceType?: DeviceType;
+    status?: DeviceStatus;
+  }): Promise<Device[]> {
     const where: Prisma.DeviceWhereInput = {};
 
     if (filter?.roomId) {
@@ -56,7 +97,7 @@ export class DevicesService {
       where.deviceType = filter.deviceType;
     }
 
-    return this.prisma.device.findMany({
+    const devices = await this.prisma.device.findMany({
       where,
       include: {
         room: {
@@ -70,6 +111,14 @@ export class DevicesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    const computed = devices.map((d) => this.attachComputedStatus(d));
+
+    if (filter?.status) {
+      return computed.filter((d) => d.status === filter.status);
+    }
+
+    return computed;
   }
 
   async findOne(id: number): Promise<Device> {
@@ -89,7 +138,7 @@ export class DevicesService {
       throw new NotFoundException(`Device with ID ${id} not found`);
     }
 
-    return device;
+    return this.attachComputedStatus(device);
   }
 
   async findByDeviceUid(deviceUid: string): Promise<Device> {
@@ -108,14 +157,14 @@ export class DevicesService {
       throw new NotFoundException(`Device with UID "${deviceUid}" not found`);
     }
 
-    return device;
+    return this.attachComputedStatus(device);
   }
 
   async findByRoomId(roomId: number): Promise<Device[]> {
     // Validate room exists
     await this.roomsService.findOne(roomId);
 
-    return this.prisma.device.findMany({
+    const devices = await this.prisma.device.findMany({
       where: { roomId },
       include: {
         _count: {
@@ -124,6 +173,30 @@ export class DevicesService {
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    return devices.map((d) => this.attachComputedStatus(d));
+  }
+
+  async getPresence(id: number): Promise<DevicePresenceInfo> {
+    const device = await this.findOne(id);
+    const thresholdSeconds = this.getOfflineThresholdSeconds();
+
+    let secondsSinceLastSeen: number | null = null;
+    if (device.lastSeenAt) {
+      secondsSinceLastSeen = Math.floor(
+        (Date.now() - new Date(device.lastSeenAt).getTime()) / 1000,
+      );
+    }
+
+    return {
+      id: device.id,
+      deviceUid: device.deviceUid,
+      name: device.name,
+      status: device.status,
+      lastSeenAt: device.lastSeenAt,
+      thresholdSeconds,
+      secondsSinceLastSeen,
+    };
   }
 
   async update(id: number, dto: UpdateDeviceDto): Promise<Device> {
@@ -143,7 +216,7 @@ export class DevicesService {
       data.metadata = dto.metadata as Prisma.InputJsonValue;
     }
 
-    return this.prisma.device.update({
+    const updated = await this.prisma.device.update({
       where: { id },
       data,
       include: {
@@ -154,19 +227,23 @@ export class DevicesService {
         },
       },
     });
+
+    return this.attachComputedStatus(updated);
   }
 
   async updateLastSeen(
     deviceUid: string,
     status: DeviceStatus = DeviceStatus.ONLINE,
   ): Promise<Device> {
-    return this.prisma.device.update({
+    const updated = await this.prisma.device.update({
       where: { deviceUid },
       data: {
         lastSeenAt: new Date(),
         status,
       },
     });
+
+    return this.attachComputedStatus(updated);
   }
 
   async remove(id: number): Promise<{ message: string; id: number }> {

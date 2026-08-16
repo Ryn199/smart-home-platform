@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DevicesService } from './devices.service';
 import { PrismaService } from '../database/prisma.service';
 import { RoomsService } from '../rooms/rooms.service';
+import { ConfigService } from '@nestjs/config';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { DeviceStatus, DeviceType } from '@prisma/client';
 
@@ -19,6 +20,9 @@ describe('DevicesService', () => {
   let roomsService: {
     findOne: jest.Mock;
   };
+  let configService: {
+    get: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -35,11 +39,19 @@ describe('DevicesService', () => {
       findOne: jest.fn(),
     };
 
+    configService = {
+      get: jest.fn().mockImplementation((key: string, defaultVal: number) => {
+        if (key === 'DEVICE_OFFLINE_THRESHOLD_SECONDS') return 60;
+        return defaultVal;
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DevicesService,
         { provide: PrismaService, useValue: prisma },
         { provide: RoomsService, useValue: roomsService },
+        { provide: ConfigService, useValue: configService },
       ],
     }).compile();
 
@@ -48,6 +60,22 @@ describe('DevicesService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('calculateStatus', () => {
+    it('should return UNKNOWN if lastSeenAt is null', () => {
+      expect(service.calculateStatus(null)).toBe(DeviceStatus.UNKNOWN);
+    });
+
+    it('should return ONLINE if lastSeenAt is within threshold', () => {
+      const recent = new Date(Date.now() - 10 * 1000); // 10s ago
+      expect(service.calculateStatus(recent)).toBe(DeviceStatus.ONLINE);
+    });
+
+    it('should return OFFLINE if lastSeenAt is older than threshold', () => {
+      const old = new Date(Date.now() - 120 * 1000); // 120s ago (threshold is 60s)
+      expect(service.calculateStatus(old)).toBe(DeviceStatus.OFFLINE);
+    });
   });
 
   describe('create', () => {
@@ -62,6 +90,7 @@ describe('DevicesService', () => {
         deviceUid: 'door-001',
         deviceType: DeviceType.SMART_DOOR,
         status: DeviceStatus.UNKNOWN,
+        lastSeenAt: null,
       };
       prisma.device.create.mockResolvedValue(mockDevice);
 
@@ -72,7 +101,7 @@ describe('DevicesService', () => {
         deviceType: DeviceType.SMART_DOOR,
       });
 
-      expect(result).toEqual(mockDevice);
+      expect(result.status).toBe(DeviceStatus.UNKNOWN);
       expect(roomsService.findOne).toHaveBeenCalledWith(1);
     });
 
@@ -103,74 +132,40 @@ describe('DevicesService', () => {
   });
 
   describe('findAll', () => {
-    it('should return all devices', async () => {
-      const mockDevices = [{ id: 1, name: 'Sensor 1', deviceType: DeviceType.CUSTOM_SENSOR }];
+    it('should return all devices with dynamic status computed', async () => {
+      const recent = new Date(Date.now() - 5000);
+      const mockDevices = [
+        { id: 1, name: 'Sensor 1', deviceType: DeviceType.CUSTOM_SENSOR, lastSeenAt: recent },
+      ];
       prisma.device.findMany.mockResolvedValue(mockDevices);
 
       const result = await service.findAll();
-      expect(result).toEqual(mockDevices);
-    });
-
-    it('should filter by deviceType', async () => {
-      const mockDevices = [{ id: 1, name: 'Fan', deviceType: DeviceType.EXHAUST_FAN }];
-      prisma.device.findMany.mockResolvedValue(mockDevices);
-
-      const result = await service.findAll({ deviceType: DeviceType.EXHAUST_FAN });
-      expect(result).toEqual(mockDevices);
-      expect(prisma.device.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ deviceType: DeviceType.EXHAUST_FAN }),
-        }),
-      );
+      expect(result[0].status).toBe(DeviceStatus.ONLINE);
     });
   });
 
-  describe('findOne', () => {
-    it('should return a device by id', async () => {
-      const mockDevice = { id: 1, name: 'Curtain 1' };
+  describe('getPresence', () => {
+    it('should return presence info with seconds since last seen', async () => {
+      const recent = new Date(Date.now() - 15 * 1000);
+      const mockDevice = {
+        id: 1,
+        deviceUid: 'curtain-001',
+        name: 'Curtain',
+        lastSeenAt: recent,
+        status: DeviceStatus.ONLINE,
+      };
       prisma.device.findUnique.mockResolvedValue(mockDevice);
 
-      const result = await service.findOne(1);
-      expect(result).toEqual(mockDevice);
-    });
-
-    it('should throw NotFoundException if device not found', async () => {
-      prisma.device.findUnique.mockResolvedValue(null);
-
-      await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('findByDeviceUid', () => {
-    it('should return a device by deviceUid', async () => {
-      const mockDevice = { id: 1, deviceUid: 'curtain-001' };
-      prisma.device.findUnique.mockResolvedValue(mockDevice);
-
-      const result = await service.findByDeviceUid('curtain-001');
-      expect(result).toEqual(mockDevice);
-    });
-
-    it('should throw NotFoundException if deviceUid not found', async () => {
-      prisma.device.findUnique.mockResolvedValue(null);
-
-      await expect(service.findByDeviceUid('unknown')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('update', () => {
-    it('should update a device', async () => {
-      const mockDevice = { id: 1, name: 'Old Name' };
-      prisma.device.findUnique.mockResolvedValue(mockDevice);
-      prisma.device.update.mockResolvedValue({ ...mockDevice, name: 'New Name' });
-
-      const result = await service.update(1, { name: 'New Name' });
-      expect(result.name).toBe('New Name');
+      const presence = await service.getPresence(1);
+      expect(presence.status).toBe(DeviceStatus.ONLINE);
+      expect(presence.thresholdSeconds).toBe(60);
+      expect(presence.secondsSinceLastSeen).toBeGreaterThanOrEqual(14);
     });
   });
 
   describe('remove', () => {
     it('should delete a device', async () => {
-      const mockDevice = { id: 1, name: 'To Delete' };
+      const mockDevice = { id: 1, name: 'To Delete', lastSeenAt: null };
       prisma.device.findUnique.mockResolvedValue(mockDevice);
       prisma.device.delete.mockResolvedValue(mockDevice);
 

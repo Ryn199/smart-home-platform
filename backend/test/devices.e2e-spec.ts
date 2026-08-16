@@ -222,6 +222,21 @@ describe('Devices (e2e)', () => {
     expect(body.name).toBe('Main Front Door Lock');
   });
 
+  it('GET /api/devices/:id/presence should return calculated presence info', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/devices/${deviceId}/presence`,
+      headers: { authorization: `Bearer ${jwtToken}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.id).toBe(deviceId);
+    expect(body.deviceUid).toBe('door-e2e-001');
+    expect(body).toHaveProperty('status');
+    expect(body).toHaveProperty('thresholdSeconds');
+  });
+
   it('DELETE /api/devices/:id should delete device', async () => {
     const res = await app.inject({
       method: 'DELETE',

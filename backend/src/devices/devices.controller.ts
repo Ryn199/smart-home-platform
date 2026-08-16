@@ -10,11 +10,11 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { DevicesService } from './devices.service';
+import { DevicePresenceInfo, DevicesService } from './devices.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Device, DeviceType } from '@prisma/client';
+import { Device, DeviceStatus, DeviceType } from '@prisma/client';
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -30,16 +30,23 @@ export class DevicesController {
   async findAll(
     @Query('roomId') roomId?: string,
     @Query('deviceType') deviceType?: DeviceType,
+    @Query('status') status?: DeviceStatus,
   ): Promise<Device[]> {
     return this.devicesService.findAll({
       roomId: roomId ? parseInt(roomId, 10) : undefined,
       deviceType,
+      status,
     });
   }
 
   @Get('devices/:id')
   async findOne(@Param('id', ParseIntPipe) id: number): Promise<Device> {
     return this.devicesService.findOne(id);
+  }
+
+  @Get('devices/:id/presence')
+  async getPresence(@Param('id', ParseIntPipe) id: number): Promise<DevicePresenceInfo> {
+    return this.devicesService.getPresence(id);
   }
 
   @Patch('devices/:id')
