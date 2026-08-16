@@ -11,6 +11,7 @@ import { CustomSensorsModule } from './custom-sensors/custom-sensors.module';
 import { SmartDoorModule } from './smart-door/smart-door.module';
 import { SmartCurtainModule } from './smart-curtain/smart-curtain.module';
 import { ExhaustFanModule } from './exhaust-fan/exhaust-fan.module';
+import { MqttModule } from './mqtt/mqtt.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ExhaustFanModule } from './exhaust-fan/exhaust-fan.module';
     SmartDoorModule,
     SmartCurtainModule,
     ExhaustFanModule,
+    MqttModule,
     HealthModule,
   ],
 })
