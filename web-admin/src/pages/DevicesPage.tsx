@@ -22,8 +22,8 @@ export const DevicesPage: React.FC = () => {
   const [deviceUid, setDeviceUid] = useState('');
   const [macAddress, setMacAddress] = useState('');
   const [pairingCode, setPairingCode] = useState('');
-  const [deviceType, setDeviceType] = useState<DeviceType>('TEMP_HUMIDITY');
-  const [roomId, setRoomId] = useState<number>(1);
+  const [deviceType, setDeviceType] = useState<DeviceType | ''>('');
+  const [roomId, setRoomId] = useState<number>(0);
 
   // Fetch homes to extract rooms
   const { data: homes = [] } = useQuery({
@@ -51,7 +51,7 @@ export const DevicesPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       closeModal();
-      setSuccessMessage('Device registered successfully! Flash the pairing code to your ESP.');
+      setSuccessMessage('Device registered successfully!');
       setTimeout(() => setSuccessMessage(null), 5000);
     },
     onError: (err: any) => {
@@ -109,12 +109,11 @@ export const DevicesPage: React.FC = () => {
   const openCreateModal = () => {
     setEditingDevice(null);
     setName('');
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    setDeviceUid(`th-${randomSuffix}`);
+    setDeviceUid('');
     setMacAddress('');
-    setPairingCode(`TH-${randomSuffix}`);
-    setDeviceType('TEMP_HUMIDITY');
-    if (allRooms.length > 0) setRoomId(allRooms[0].id);
+    setPairingCode('');
+    setDeviceType('');
+    setRoomId(0);
     setErrorMessage(null);
     setIsModalOpen(true);
   };
@@ -138,6 +137,8 @@ export const DevicesPage: React.FC = () => {
     setDeviceUid('');
     setMacAddress('');
     setPairingCode('');
+    setDeviceType('');
+    setRoomId(0);
     setErrorMessage(null);
   };
 
@@ -149,9 +150,16 @@ export const DevicesPage: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      setErrorMessage('Nama perangkat wajib diisi');
+      return;
+    }
 
     if (editingDevice) {
+      if (!roomId || roomId === 0) {
+        setErrorMessage('Silakan pilih ruangan');
+        return;
+      }
       updateMutation.mutate({
         id: editingDevice.id,
         data: {
@@ -162,13 +170,24 @@ export const DevicesPage: React.FC = () => {
         },
       });
     } else {
-      if (!deviceUid.trim()) return;
+      if (!deviceUid.trim()) {
+        setErrorMessage('UID perangkat wajib diisi');
+        return;
+      }
+      if (!deviceType) {
+        setErrorMessage('Silakan pilih tipe perangkat');
+        return;
+      }
+      if (!roomId || roomId === 0) {
+        setErrorMessage('Silakan pilih ruangan');
+        return;
+      }
       registerMutation.mutate({
         name: name.trim(),
         deviceUid: deviceUid.trim(),
         macAddress: macAddress.trim() || undefined,
         pairingCode: pairingCode.trim() || undefined,
-        deviceType,
+        deviceType: deviceType as DeviceType,
         roomId,
       });
     }
@@ -451,7 +470,7 @@ export const DevicesPage: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Living Room DHT22, Front Door Lock, Kitchen Fan"
+                  placeholder="Nama perangkat (e.g. DHT22 Ruang Tamu)"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm"
@@ -466,14 +485,14 @@ export const DevicesPage: React.FC = () => {
                   type="text"
                   required
                   disabled={!!editingDevice}
-                  placeholder="e.g. th-001, door-001, fan-001, curtain-001"
+                  placeholder="UID unik perangkat (e.g. th-001)"
                   value={deviceUid}
                   onChange={(e) => setDeviceUid(e.target.value)}
                   className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm font-data-mono disabled:opacity-50 disabled:bg-surface-container-low"
                 />
               </div>
 
-              {/* Hardware Security: Pairing Code (Primary) */}
+              {/* Hardware Security: Pairing Code */}
               <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/60 space-y-sm">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase">
                   <span className="material-symbols-outlined text-[16px]">lock</span>
@@ -487,13 +506,13 @@ export const DevicesPage: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. TH-7788, SENSOR-01"
+                    placeholder="Pairing code (e.g. TH-7788)"
                     value={pairingCode}
                     onChange={(e) => setPairingCode(e.target.value)}
                     className="w-full px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-xs font-data-mono font-bold"
                   />
                   <span className="text-[10px] text-outline block mt-1 leading-relaxed">
-                    Hardcode this code into your ESP firmware (<code className="text-primary font-bold">#define PAIRING_CODE &quot;{pairingCode || 'YOUR_CODE'}&quot;</code>). On first connection, the backend will automatically bind the hardware MAC address of the ESP to this device.
+                    Hardcode kode ini pada firmware ESP Anda. Saat ESP pertama kali terhubung, MAC address ESP akan otomatis terikat.
                   </span>
                 </div>
 
@@ -506,7 +525,7 @@ export const DevicesPage: React.FC = () => {
                       <input
                         type="text"
                         disabled
-                        value={macAddress || 'Not yet bound (Waiting for ESP)'}
+                        value={macAddress || 'Belum terikat (Menunggu ESP)'}
                         className="w-full px-3 py-1.5 border border-outline-variant rounded-lg bg-surface-container-highest text-on-surface-variant text-xs font-data-mono disabled:opacity-75"
                       />
                       {macAddress && (
@@ -525,7 +544,7 @@ export const DevicesPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant uppercase mb-1">
-                  Device Type
+                  Device Type *
                 </label>
                 <select
                   disabled={!!editingDevice}
@@ -533,6 +552,9 @@ export const DevicesPage: React.FC = () => {
                   onChange={(e) => setDeviceType(e.target.value as DeviceType)}
                   className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm disabled:opacity-50 disabled:bg-surface-container-low"
                 >
+                  <option value="" disabled>
+                    Pilih tipe perangkat
+                  </option>
                   <option value="TEMP_HUMIDITY">TEMP_HUMIDITY (Temperature &amp; Humidity)</option>
                   <option value="SMART_DOOR">SMART_DOOR (Lock/Unlock)</option>
                   <option value="SMART_CURTAIN">SMART_CURTAIN (Motor Position)</option>
@@ -549,6 +571,9 @@ export const DevicesPage: React.FC = () => {
                   onChange={(e) => setRoomId(parseInt(e.target.value, 10))}
                   className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm"
                 >
+                  <option value={0} disabled>
+                    Pilih ruangan
+                  </option>
                   {allRooms.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name} ({r.homeName})
