@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import { Logger } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
@@ -13,6 +13,15 @@ async function bootstrap(): Promise<void> {
 
   // Global API prefix — all endpoints are under /api
   app.setGlobalPrefix('api');
+
+  // Global validation pipe for all DTOs
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
 
   const port = process.env.PORT ?? 3000;
   const host = '0.0.0.0';
