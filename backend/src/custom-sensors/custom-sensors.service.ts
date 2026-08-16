@@ -4,6 +4,8 @@ import { DevicesService } from '../devices/devices.service';
 import { EventsGateway } from '../websocket/events.gateway';
 import { AutomationService } from '../automation/automation.service';
 import { GetReadingsQueryDto } from './dto/get-readings-query.dto';
+import { CreateSensorDto } from './dto/create-sensor.dto';
+import { UpdateSensorDto } from './dto/update-sensor.dto';
 import { Device, Prisma, Sensor, SensorReading } from '@prisma/client';
 
 function getDefaultUnit(type: string): string {
@@ -12,7 +14,7 @@ function getDefaultUnit(type: string): string {
   if (lower.includes('humid')) return '%';
   if (lower.includes('press')) return 'hPa';
   if (lower.includes('light') || lower.includes('lux')) return 'lx';
-  if (lower.includes('co2')) return 'ppm';
+  if (lower.includes('co2') || lower.includes('gas')) return 'ppm';
   if (lower.includes('voltage') || lower.includes('volt')) return 'V';
   if (lower.includes('current') || lower.includes('amp')) return 'A';
   if (lower.includes('power') || lower.includes('watt')) return 'W';
@@ -42,6 +44,54 @@ export class CustomSensorsService {
     private readonly eventsGateway: EventsGateway,
   ) {}
 
+  async create(dto: CreateSensorDto): Promise<Sensor> {
+    // Validate device exists
+    await this.devicesService.findOne(dto.deviceId);
+
+    const unit = dto.unit?.trim() || getDefaultUnit(dto.type);
+
+    return this.prisma.sensor.create({
+      data: {
+        deviceId: dto.deviceId,
+        name: dto.name.trim(),
+        type: dto.type.trim().toLowerCase(),
+        unit,
+      },
+      include: {
+        device: {
+          include: {
+            room: true,
+          },
+        },
+        readings: {
+          take: 1,
+          orderBy: { recordedAt: 'desc' },
+        },
+      },
+    });
+  }
+
+  async findAll(): Promise<Sensor[]> {
+    return this.prisma.sensor.findMany({
+      include: {
+        device: {
+          include: {
+            room: {
+              include: {
+                home: true,
+              },
+            },
+          },
+        },
+        readings: {
+          take: 1,
+          orderBy: { recordedAt: 'desc' },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
+
   async getSensorsByDeviceId(deviceId: number): Promise<Sensor[]> {
     // Validate device exists
     await this.devicesService.findOne(deviceId);
@@ -64,7 +114,11 @@ export class CustomSensorsService {
       include: {
         device: {
           include: {
-            room: true,
+            room: {
+              include: {
+                home: true,
+              },
+            },
           },
         },
         readings: {
@@ -79,6 +133,45 @@ export class CustomSensorsService {
     }
 
     return sensor;
+  }
+
+  async update(sensorId: number, dto: UpdateSensorDto): Promise<Sensor> {
+    await this.getSensorById(sensorId);
+
+    if (dto.deviceId) {
+      await this.devicesService.findOne(dto.deviceId);
+    }
+
+    return this.prisma.sensor.update({
+      where: { id: sensorId },
+      data: {
+        ...(dto.name ? { name: dto.name.trim() } : {}),
+        ...(dto.type ? { type: dto.type.trim().toLowerCase() } : {}),
+        ...(dto.unit !== undefined ? { unit: dto.unit.trim() } : {}),
+        ...(dto.deviceId ? { deviceId: dto.deviceId } : {}),
+      },
+      include: {
+        device: {
+          include: {
+            room: true,
+          },
+        },
+        readings: {
+          take: 1,
+          orderBy: { recordedAt: 'desc' },
+        },
+      },
+    });
+  }
+
+  async remove(sensorId: number): Promise<{ message: string; id: number }> {
+    await this.getSensorById(sensorId);
+
+    await this.prisma.sensor.delete({
+      where: { id: sensorId },
+    });
+
+    return { message: `Sensor with ID ${sensorId} deleted successfully`, id: sensorId };
   }
 
   async getSensorReadings(

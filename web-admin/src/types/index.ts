@@ -82,6 +82,7 @@ export interface Sensor {
   unit: string;
   createdAt: string;
   updatedAt: string;
+  device?: Device;
   readings?: SensorReading[];
 }
 
