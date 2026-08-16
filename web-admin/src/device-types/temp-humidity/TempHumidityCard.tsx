@@ -57,9 +57,19 @@ export const TempHumidityCard: React.FC<TempHumidityCardProps> = ({ device }) =>
         {/* Temperature Card */}
         <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/60 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="font-label-caps text-label-caps text-on-surface-variant uppercase text-[10px]">
-              Temperature
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  temp !== '--' && device.status === 'ONLINE'
+                    ? 'bg-[#10b981] animate-pulse'
+                    : 'bg-error'
+                }`}
+                title={temp !== '--' && device.status === 'ONLINE' ? 'Data Terupdate' : 'Tidak Ada Update'}
+              />
+              <span className="font-label-caps text-label-caps text-on-surface-variant uppercase text-[10px]">
+                Temperature
+              </span>
+            </div>
             <span className="material-symbols-outlined text-primary text-[18px]">
               thermostat
             </span>
@@ -73,9 +83,19 @@ export const TempHumidityCard: React.FC<TempHumidityCardProps> = ({ device }) =>
         {/* Humidity Card */}
         <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/60 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="font-label-caps text-label-caps text-on-surface-variant uppercase text-[10px]">
-              Humidity
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  hum !== '--' && device.status === 'ONLINE'
+                    ? 'bg-[#10b981] animate-pulse'
+                    : 'bg-error'
+                }`}
+                title={hum !== '--' && device.status === 'ONLINE' ? 'Data Terupdate' : 'Tidak Ada Update'}
+              />
+              <span className="font-label-caps text-label-caps text-on-surface-variant uppercase text-[10px]">
+                Humidity
+              </span>
+            </div>
             <span className="material-symbols-outlined text-[#0284c7] text-[18px]">
               humidity_mid
             </span>

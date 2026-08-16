@@ -26,14 +26,27 @@ export interface TempHumidityStats {
   };
 }
 
+export interface GetHistoryOptions {
+  timeframe?: '1h' | '24h' | '7d' | 'custom' | 'all';
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+}
+
 export const tempHumidityApi = {
   getHistory: (
     deviceUid: string,
-    timeframe: '1h' | '24h' | '7d' | 'all' = '1h',
-    limit = 100,
+    options: GetHistoryOptions = {},
   ): Promise<TempHumidityReading[]> => {
+    const params = new URLSearchParams();
+    if (options.timeframe) params.append('timeframe', options.timeframe);
+    if (options.startDate) params.append('startDate', options.startDate);
+    if (options.endDate) params.append('endDate', options.endDate);
+    if (options.limit) params.append('limit', String(options.limit));
+
+    const qs = params.toString();
     return apiClient<TempHumidityReading[]>(
-      `/temp-humidity/${encodeURIComponent(deviceUid)}/history?timeframe=${timeframe}&limit=${limit}`,
+      `/temp-humidity/${encodeURIComponent(deviceUid)}/history${qs ? `?${qs}` : ''}`,
     );
   },
 

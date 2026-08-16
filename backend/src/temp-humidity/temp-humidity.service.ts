@@ -106,30 +106,43 @@ export class TempHumidityService {
 
     const now = new Date();
     let startDate: Date | undefined;
+    let endDate: Date | undefined;
 
-    switch (query.timeframe) {
-      case '1h':
-        startDate = new Date(now.getTime() - 60 * 60 * 1000);
-        break;
-      case '24h':
-        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        break;
-      case '7d':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case 'all':
-      default:
-        startDate = undefined;
-        break;
+    if (query.timeframe === 'custom' || query.startDate || query.endDate) {
+      if (query.startDate) startDate = new Date(query.startDate);
+      if (query.endDate) endDate = new Date(query.endDate);
+    } else {
+      switch (query.timeframe) {
+        case '1h':
+          startDate = new Date(now.getTime() - 60 * 60 * 1000);
+          break;
+        case '24h':
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'all':
+        default:
+          startDate = undefined;
+          break;
+      }
     }
 
     const readings = await this.prisma.tempHumidityReading.findMany({
       where: {
         deviceId: device.id,
-        ...(startDate ? { recordedAt: { gte: startDate } } : {}),
+        ...(startDate || endDate
+          ? {
+              recordedAt: {
+                ...(startDate ? { gte: startDate } : {}),
+                ...(endDate ? { lte: endDate } : {}),
+              },
+            }
+          : {}),
       },
       orderBy: { recordedAt: 'asc' },
-      take: query.limit || 100,
+      take: query.limit || 200,
     });
 
     return readings;

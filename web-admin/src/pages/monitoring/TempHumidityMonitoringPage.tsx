@@ -44,7 +44,16 @@ export const TempHumidityMonitoringPage: React.FC = () => {
   const { deviceStates } = useWebSocket();
   const { isPinned, togglePin } = usePinnedDevices();
 
-  const [timeframe, setTimeframe] = useState<'1h' | '24h' | '7d' | 'all'>('1h');
+  // Timeframe and custom date range state
+  const [timeframe, setTimeframe] = useState<'1h' | '24h' | '7d' | 'custom' | 'all'>('1h');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [appliedCustomRange, setAppliedCustomRange] = useState<{ start?: string; end?: string }>({});
+
+  // Pagination and page size state for telemetry table
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryPoint[]>([]);
 
   // 1. Fetch devices list to resolve this device
@@ -57,8 +66,22 @@ export const TempHumidityMonitoringPage: React.FC = () => {
 
   // 2. Fetch historical database telemetry readings (NO dummy fallback)
   const { data: dbHistory = [], isLoading: isLoadingHistory } = useQuery({
-    queryKey: ['tempHumidityHistory', deviceUid, timeframe],
-    queryFn: () => (deviceUid ? tempHumidityApi.getHistory(deviceUid, timeframe, 200) : []),
+    queryKey: [
+      'tempHumidityHistory',
+      deviceUid,
+      timeframe,
+      appliedCustomRange.start,
+      appliedCustomRange.end,
+    ],
+    queryFn: () => {
+      if (!deviceUid) return [];
+      return tempHumidityApi.getHistory(deviceUid, {
+        timeframe,
+        startDate: timeframe === 'custom' ? appliedCustomRange.start : undefined,
+        endDate: timeframe === 'custom' ? appliedCustomRange.end : undefined,
+        limit: 500,
+      });
+    },
     enabled: !!deviceUid,
   });
 
@@ -91,9 +114,10 @@ export const TempHumidityMonitoringPage: React.FC = () => {
     } else {
       setTelemetryHistory([]);
     }
+    setCurrentPage(1);
   }, [dbHistory]);
 
-  // 5. Read live metadata from WebSocket or device database (NO dummy values)
+  // 5. Read live metadata from WebSocket or device database
   const rawState = (
     deviceUid && deviceStates[deviceUid]
       ? deviceStates[deviceUid]
@@ -104,6 +128,17 @@ export const TempHumidityMonitoringPage: React.FC = () => {
 
   const currentTemp = typeof liveState.temperature === 'number' ? liveState.temperature : null;
   const currentHum = typeof liveState.humidity === 'number' ? liveState.humidity : null;
+
+  // Track live freshness (Active/Fresh if updated within last 15 seconds)
+  const [isFreshUpdate, setIsFreshUpdate] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (currentTemp !== null && currentHum !== null) {
+      setIsFreshUpdate(true);
+      const timeout = setTimeout(() => setIsFreshUpdate(false), 15000);
+      return () => clearTimeout(timeout);
+    }
+  }, [currentTemp, currentHum, liveState.lastUpdated]);
 
   // 6. Append incoming WebSocket telemetry to the live chart in real time
   useEffect(() => {
@@ -128,7 +163,6 @@ export const TempHumidityMonitoringPage: React.FC = () => {
         }
 
         const last = prev[prev.length - 1];
-        // Don't add duplicate reading if values & minute match
         if (
           last &&
           last.temperature === currentTemp &&
@@ -147,13 +181,12 @@ export const TempHumidityMonitoringPage: React.FC = () => {
             humidity: currentHum,
           },
         ];
-        // Keep at most 200 points for smooth rendering
-        return next.slice(-200);
+        return next.slice(-500);
       });
     }
   }, [currentTemp, currentHum]);
 
-  // Comfort Index Calculation (Shows 'Belum Ada Data' if no data)
+  // Comfort Index Calculation
   const comfortInfo = useMemo(() => {
     if (currentTemp === null || currentHum === null) {
       return {
@@ -196,7 +229,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
     };
   }, [currentTemp, currentHum]);
 
-  // Combined Stats: Database aggregate or session calculation (NO dummy fallback)
+  // Combined Stats: Database aggregate or session calculation
   const stats = useMemo(() => {
     if (dbStats?.stats && dbStats.stats.totalReadings > 0) {
       return {
@@ -235,6 +268,25 @@ export const TempHumidityMonitoringPage: React.FC = () => {
       totalCount: telemetryHistory.length,
     };
   }, [dbStats, telemetryHistory]);
+
+  // Handle custom date range apply
+  const handleApplyCustomRange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customStartDate && !customEndDate) return;
+    setAppliedCustomRange({
+      start: customStartDate ? new Date(customStartDate).toISOString() : undefined,
+      end: customEndDate ? new Date(customEndDate).toISOString() : undefined,
+    });
+  };
+
+  // Pagination calculations
+  const totalRecords = telemetryHistory.length;
+  const totalPages = Math.ceil(totalRecords / pageSize) || 1;
+  const paginatedLogs = useMemo(() => {
+    const reversed = [...telemetryHistory].reverse();
+    const startIndex = (currentPage - 1) * pageSize;
+    return reversed.slice(startIndex, startIndex + pageSize);
+  }, [telemetryHistory, currentPage, pageSize]);
 
   // Chart configuration
   const chartData = {
@@ -331,7 +383,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
   if (isLoadingDevice) {
     return (
       <div className="p-xl text-center text-outline">
-        Loading temperature & humidity monitoring node...
+        Loading temperature &amp; humidity monitoring node...
       </div>
     );
   }
@@ -429,6 +481,8 @@ export const TempHumidityMonitoringPage: React.FC = () => {
               <span>UID: {device?.deviceUid}</span>
               <span>Room: {device?.room?.name || 'Unassigned'}</span>
               <span>Type: TEMP_HUMIDITY</span>
+              {device?.pairingCode && <span>Pairing: {device.pairingCode}</span>}
+              {device?.macAddress && <span>MAC: {device.macAddress}</span>}
             </div>
           </div>
         </div>
@@ -449,20 +503,36 @@ export const TempHumidityMonitoringPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Live Readout Metrics Grid */}
+      {/* Live Readout Metrics Grid with Indicator Dots */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-md">
-        {/* Current Temperature */}
-        <div className="bg-surface border border-outline-variant rounded-xl p-lg flex flex-col justify-between shadow-sm">
+        {/* Card 1: Current Temperature */}
+        <div className="bg-surface border border-outline-variant rounded-xl p-lg flex flex-col justify-between shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between text-on-surface-variant">
-            <span className="font-label-caps text-label-caps uppercase">Temperature</span>
+            <div className="flex items-center gap-2">
+              {/* Status Indicator Dot */}
+              <span className="flex h-2.5 w-2.5 relative">
+                {isFreshUpdate && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75" />
+                )}
+                <span
+                  className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                    isFreshUpdate ? 'bg-[#10b981]' : 'bg-error'
+                  }`}
+                  title={isFreshUpdate ? 'Data Baru / Live' : 'Tidak Ada Update Terbaru'}
+                />
+              </span>
+              <span className="font-label-caps text-label-caps uppercase">Temperature</span>
+            </div>
             <span className="material-symbols-outlined text-[#0284c7] text-[20px]">thermostat</span>
           </div>
+
           <div className="my-3 flex items-baseline gap-1">
             <span className="font-display-stat text-display-stat text-on-surface font-extrabold">
               {currentTemp !== null ? currentTemp : '--'}
             </span>
             {currentTemp !== null && <span className="text-lg font-bold text-outline">°C</span>}
           </div>
+
           <div className="pt-2 border-t border-outline-variant/60 flex justify-between text-xs text-outline font-data-mono">
             <span>Min: {stats.tempMin}</span>
             <span>Avg: {stats.tempAvg}</span>
@@ -470,18 +540,34 @@ export const TempHumidityMonitoringPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Current Humidity */}
-        <div className="bg-surface border border-outline-variant rounded-xl p-lg flex flex-col justify-between shadow-sm">
+        {/* Card 2: Current Humidity */}
+        <div className="bg-surface border border-outline-variant rounded-xl p-lg flex flex-col justify-between shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between text-on-surface-variant">
-            <span className="font-label-caps text-label-caps uppercase">Relative Humidity</span>
+            <div className="flex items-center gap-2">
+              {/* Status Indicator Dot */}
+              <span className="flex h-2.5 w-2.5 relative">
+                {isFreshUpdate && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75" />
+                )}
+                <span
+                  className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                    isFreshUpdate ? 'bg-[#10b981]' : 'bg-error'
+                  }`}
+                  title={isFreshUpdate ? 'Data Baru / Live' : 'Tidak Ada Update Terbaru'}
+                />
+              </span>
+              <span className="font-label-caps text-label-caps uppercase">Humidity</span>
+            </div>
             <span className="material-symbols-outlined text-[#10b981] text-[20px]">humidity_mid</span>
           </div>
+
           <div className="my-3 flex items-baseline gap-1">
             <span className="font-display-stat text-display-stat text-on-surface font-extrabold">
               {currentHum !== null ? currentHum : '--'}
             </span>
             {currentHum !== null && <span className="text-lg font-bold text-outline">%</span>}
           </div>
+
           <div className="pt-2 border-t border-outline-variant/60 flex justify-between text-xs text-outline font-data-mono">
             <span>Min: {stats.humMin}</span>
             <span>Avg: {stats.humAvg}</span>
@@ -489,12 +575,21 @@ export const TempHumidityMonitoringPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Dew Point Estimate */}
+        {/* Card 3: Dew Point Estimate */}
         <div className="bg-surface border border-outline-variant rounded-xl p-lg flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between text-on-surface-variant">
-            <span className="font-label-caps text-label-caps uppercase">Est. Dew Point</span>
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex rounded-full h-2.5 w-2.5 ${
+                  currentTemp !== null && currentHum !== null ? 'bg-[#10b981]' : 'bg-error'
+                }`}
+                title={currentTemp !== null && currentHum !== null ? 'Kalkulasi Aktif' : 'Tidak Ada Data'}
+              />
+              <span className="font-label-caps text-label-caps uppercase">Est. Dew Point</span>
+            </div>
             <span className="material-symbols-outlined text-primary text-[20px]">water_drop</span>
           </div>
+
           <div className="my-3 flex items-baseline gap-1">
             <span className="font-display-stat text-display-stat text-on-surface font-extrabold">
               {currentTemp !== null && currentHum !== null
@@ -505,35 +600,52 @@ export const TempHumidityMonitoringPage: React.FC = () => {
               <span className="text-lg font-bold text-outline">°C</span>
             )}
           </div>
+
           <div className="pt-2 border-t border-outline-variant/60 text-xs text-outline">
             Titik embun kondensasi
           </div>
         </div>
 
-        {/* Database & Telemetry Health */}
+        {/* Card 4: Database & Telemetry Health */}
         <div className="bg-surface border border-outline-variant rounded-xl p-lg flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between text-on-surface-variant">
-            <span className="font-label-caps text-label-caps uppercase">Telemetry Storage</span>
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex rounded-full h-2.5 w-2.5 ${
+                  stats.totalCount > 0 ? 'bg-[#10b981]' : 'bg-error'
+                }`}
+                title={stats.totalCount > 0 ? 'Tersimpan di Database' : 'Belum Ada Transmisi'}
+              />
+              <span className="font-label-caps text-label-caps uppercase">Telemetry Storage</span>
+            </div>
             <span className="material-symbols-outlined text-primary text-[20px]">database</span>
           </div>
+
           <div className="my-3 space-y-1">
             <div className="text-sm font-bold text-on-surface flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${stats.totalCount > 0 ? 'bg-[#10b981] animate-ping' : 'bg-outline'}`} />
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  stats.totalCount > 0 ? 'bg-[#10b981] animate-ping' : 'bg-outline'
+                }`}
+              />
               <span>{stats.totalCount > 0 ? 'PostgreSQL & WebSocket' : 'Belum Ada Transmisi'}</span>
             </div>
             <div className="text-xs text-outline font-data-mono">
               Total Data: {stats.totalCount} points
             </div>
           </div>
+
           <div className="pt-2 border-t border-outline-variant/60 text-xs text-outline">
-            {liveState.lastUpdated ? `Update: ${new Date(String(liveState.lastUpdated)).toLocaleTimeString()}` : 'Belum pernah update'}
+            {liveState.lastUpdated
+              ? `Update: ${new Date(String(liveState.lastUpdated)).toLocaleTimeString()}`
+              : 'Belum pernah update'}
           </div>
         </div>
       </div>
 
       {/* Telemetry Chart Section */}
       <div className="bg-surface border border-outline-variant rounded-xl p-lg space-y-md shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-md border-b border-outline-variant pb-md">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-md border-b border-outline-variant pb-md">
           <div>
             <h3 className="font-headline-md text-headline-md text-on-surface font-bold flex items-center gap-2">
               <span>Environmental Telemetry Trends</span>
@@ -549,22 +661,74 @@ export const TempHumidityMonitoringPage: React.FC = () => {
           </div>
 
           {/* Timeframe selector */}
-          <div className="flex items-center p-1 bg-surface-container-low border border-outline-variant rounded-lg text-xs font-semibold">
-            {(['1h', '24h', '7d', 'all'] as const).map((tf) => (
-              <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                className={`px-3 py-1 rounded-md transition-colors uppercase cursor-pointer ${
-                  timeframe === tf
-                    ? 'bg-primary text-on-primary shadow-xs'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`}
-              >
-                {tf}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center p-1 bg-surface-container-low border border-outline-variant rounded-lg text-xs font-semibold">
+              {(['1h', '24h', '7d', 'custom', 'all'] as const).map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  className={`px-3 py-1 rounded-md transition-colors uppercase cursor-pointer ${
+                    timeframe === tf
+                      ? 'bg-primary text-on-primary shadow-xs'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  {tf === 'custom' ? 'Custom Range' : tf}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Custom Date Range Picker Form (Shown when timeframe === 'custom') */}
+        {timeframe === 'custom' && (
+          <form
+            onSubmit={handleApplyCustomRange}
+            className="p-md bg-surface-container-low border border-outline-variant rounded-xl flex flex-wrap items-center gap-md text-xs"
+          >
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-on-surface-variant">Dari:</span>
+              <input
+                type="datetime-local"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary font-data-mono"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-on-surface-variant">Sampai:</span>
+              <input
+                type="datetime-local"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary font-data-mono"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="px-4 py-1.5 bg-primary text-on-primary font-semibold rounded-lg hover:bg-primary/90 transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[16px]">filter_alt</span>
+              Terapkan Rentang Waktu
+            </button>
+
+            {(appliedCustomRange.start || appliedCustomRange.end) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomStartDate('');
+                  setCustomEndDate('');
+                  setAppliedCustomRange({});
+                }}
+                className="px-3 py-1.5 border border-outline-variant text-on-surface-variant rounded-lg hover:bg-surface transition-colors cursor-pointer"
+              >
+                Reset Filter
+              </button>
+            )}
+          </form>
+        )}
 
         {/* Chart Canvas or Empty State */}
         <div className="h-[320px] w-full pt-2">
@@ -582,18 +746,37 @@ export const TempHumidityMonitoringPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Telemetry Database & Stream Table */}
+      {/* Telemetry Database & Stream Table with Page Size & Pagination */}
       <div className="bg-surface border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-        <div className="p-md bg-surface-container-low border-b border-outline-variant flex justify-between items-center">
-          <h4 className="font-headline-md text-headline-md text-on-surface font-bold">
-            Historical Telemetry Logs ({timeframe.toUpperCase()})
-          </h4>
-          <span className="text-xs text-outline font-data-mono">
-            {telemetryHistory.length} data tercatat
-          </span>
+        <div className="p-md bg-surface-container-low border-b border-outline-variant flex flex-col sm:flex-row sm:items-center justify-between gap-sm">
+          <div>
+            <h4 className="font-headline-md text-headline-md text-on-surface font-bold">
+              Historical Telemetry Logs ({timeframe.toUpperCase()})
+            </h4>
+            <span className="text-xs text-outline font-data-mono">
+              Total {totalRecords} data tersimpan
+            </span>
+          </div>
+
+          {/* Page Size Selector */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-on-surface-variant font-medium">Tampilkan per halaman:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="px-2.5 py-1 border border-outline-variant rounded-lg bg-surface text-on-surface font-semibold focus:outline-none focus:border-primary cursor-pointer"
+            >
+              <option value={10}>10 data</option>
+              <option value={15}>15 data</option>
+              <option value={20}>20 data</option>
+            </select>
+          </div>
         </div>
 
-        <div className="overflow-x-auto max-h-[260px] overflow-y-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-surface-container-low/60 border-b border-outline-variant text-on-surface-variant font-label-caps text-label-caps uppercase sticky top-0 bg-surface">
               <tr>
@@ -605,41 +788,88 @@ export const TempHumidityMonitoringPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/60">
-              {telemetryHistory.length === 0 ? (
+              {paginatedLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-lg py-8 text-center text-outline text-xs">
                     Belum ada riwayat data telemetri yang tercatat di database untuk perangkat ini.
                   </td>
                 </tr>
               ) : (
-                telemetryHistory
-                  .slice()
-                  .reverse()
-                  .map((point, idx) => (
-                    <tr key={idx} className="hover:bg-surface-container-low/40">
-                      <td className="px-lg py-2 font-data-mono text-xs text-outline">
-                        {point.timeLabel}
-                      </td>
-                      <td className="px-lg py-2 font-semibold text-[#0284c7]">
-                        {point.temperature}°C
-                      </td>
-                      <td className="px-lg py-2 font-semibold text-[#10b981]">
-                        {point.humidity}%
-                      </td>
-                      <td className="px-lg py-2 text-on-surface-variant text-xs font-data-mono">
-                        {(point.temperature - (100 - point.humidity) / 5).toFixed(1)}°C
-                      </td>
-                      <td className="px-lg py-2 text-right">
-                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#ecfdf5] text-[#059669]">
-                          {point.id ? 'POSTGRES_DB' : 'LIVE_MQTT'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+                paginatedLogs.map((point, idx) => (
+                  <tr key={point.id ?? idx} className="hover:bg-surface-container-low/40">
+                    <td className="px-lg py-2.5 font-data-mono text-xs text-outline">
+                      {point.timeLabel}
+                    </td>
+                    <td className="px-lg py-2.5 font-semibold text-[#0284c7]">
+                      {point.temperature}°C
+                    </td>
+                    <td className="px-lg py-2.5 font-semibold text-[#10b981]">
+                      {point.humidity}%
+                    </td>
+                    <td className="px-lg py-2.5 text-on-surface-variant text-xs font-data-mono">
+                      {(point.temperature - (100 - point.humidity) / 5).toFixed(1)}°C
+                    </td>
+                    <td className="px-lg py-2.5 text-right">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#ecfdf5] text-[#059669]">
+                        {point.id ? 'POSTGRES_DB' : 'LIVE_MQTT'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        {totalRecords > 0 && (
+          <div className="p-md bg-surface-container-low border-t border-outline-variant flex flex-col sm:flex-row sm:items-center justify-between gap-md text-xs">
+            <div className="text-outline font-data-mono">
+              Menampilkan {Math.min((currentPage - 1) * pageSize + 1, totalRecords)} -{' '}
+              {Math.min(currentPage * pageSize, totalRecords)} dari {totalRecords} log
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1 rounded border border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                title="Halaman Pertama"
+              >
+                « Pertama
+              </button>
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1 rounded border border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                title="Halaman Sebelumnya"
+              >
+                ‹ Prev
+              </button>
+
+              <span className="px-3 py-1 font-semibold text-on-surface bg-surface border border-outline-variant rounded">
+                Halaman {currentPage} dari {totalPages}
+              </span>
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1 rounded border border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                title="Halaman Berikutnya"
+              >
+                Next ›
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1 rounded border border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                title="Halaman Terakhir"
+              >
+                Terakhir »
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
