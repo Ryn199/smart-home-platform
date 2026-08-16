@@ -1,16 +1,7 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as mqtt from 'mqtt';
-import {
-  MqttMessageHandler,
-  MqttMessageType,
-  ParsedMqttTopic,
-} from './mqtt.types';
+import { MqttMessageHandler, MqttMessageType, ParsedMqttTopic } from './mqtt.types';
 
 @Injectable()
 export class MqttService implements OnModuleInit, OnModuleDestroy {
@@ -30,9 +21,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   async connect(): Promise<void> {
-    const brokerUrl =
-      this.configService.get<string>('MQTT_BROKER_URL') ??
-      'mqtt://localhost:1883';
+    const brokerUrl = this.configService.get<string>('MQTT_BROKER_URL') ?? 'mqtt://localhost:1883';
     const username = this.configService.get<string>('MQTT_USERNAME');
     const password = this.configService.get<string>('MQTT_PASSWORD');
 
@@ -113,9 +102,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
 
     this.client.subscribe(topic, (err) => {
       if (err) {
-        this.logger.error(
-          `Failed to subscribe to "${topic}": ${err.message}`,
-        );
+        this.logger.error(`Failed to subscribe to "${topic}": ${err.message}`);
       } else {
         this.logger.log(`Subscribed to topic: ${topic}`);
       }
@@ -128,21 +115,16 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     options: mqtt.IClientPublishOptions = { qos: 1 },
   ): Promise<void> {
     if (!this.client || !this.connected) {
-      this.logger.warn(
-        `Cannot publish to "${topic}": MQTT client is not connected.`,
-      );
+      this.logger.warn(`Cannot publish to "${topic}": MQTT client is not connected.`);
       return;
     }
 
-    const payload =
-      typeof message === 'object' ? JSON.stringify(message) : message;
+    const payload = typeof message === 'object' ? JSON.stringify(message) : message;
 
     return new Promise<void>((resolve, reject) => {
       this.client?.publish(topic, payload, options, (err) => {
         if (err) {
-          this.logger.error(
-            `Failed to publish message to "${topic}": ${err.message}`,
-          );
+          this.logger.error(`Failed to publish message to "${topic}": ${err.message}`);
           reject(err);
         } else {
           this.logger.debug?.(`Published to ${topic}: ${payload}`);
@@ -199,16 +181,12 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         if (result instanceof Promise) {
           result.catch((err: unknown) => {
             const message = err instanceof Error ? err.message : String(err);
-            this.logger.error(
-              `Error in async MQTT handler for "${topic}": ${message}`,
-            );
+            this.logger.error(`Error in async MQTT handler for "${topic}": ${message}`);
           });
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        this.logger.error(
-          `Error in synchronous MQTT handler for "${topic}": ${message}`,
-        );
+        this.logger.error(`Error in synchronous MQTT handler for "${topic}": ${message}`);
       }
     }
   }
