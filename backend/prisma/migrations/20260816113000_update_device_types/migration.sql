@@ -1,0 +1,8 @@
+-- AlterEnum
+BEGIN;
+CREATE TYPE "DeviceType_new" AS ENUM ('CUSTOM_SENSOR', 'SMART_DOOR', 'SMART_CURTAIN', 'EXHAUST_FAN');
+ALTER TABLE "devices" DROP COLUMN IF EXISTS "type";
+ALTER TABLE "devices" ADD COLUMN "deviceType" "DeviceType_new" NOT NULL DEFAULT 'CUSTOM_SENSOR';
+DROP TYPE "DeviceType";
+ALTER TYPE "DeviceType_new" RENAME TO "DeviceType";
+COMMIT;

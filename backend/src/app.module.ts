@@ -4,6 +4,13 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { HomesModule } from './homes/homes.module';
+import { RoomsModule } from './rooms/rooms.module';
+import { DevicesModule } from './devices/devices.module';
+import { CustomSensorsModule } from './custom-sensors/custom-sensors.module';
+import { SmartDoorModule } from './smart-door/smart-door.module';
+import { SmartCurtainModule } from './smart-curtain/smart-curtain.module';
+import { ExhaustFanModule } from './exhaust-fan/exhaust-fan.module';
 
 @Module({
   imports: [
@@ -14,6 +21,13 @@ import { AuthModule } from './auth/auth.module';
     DatabaseModule,
     UsersModule,
     AuthModule,
+    HomesModule,
+    RoomsModule,
+    DevicesModule,
+    CustomSensorsModule,
+    SmartDoorModule,
+    SmartCurtainModule,
+    ExhaustFanModule,
     HealthModule,
   ],
 })

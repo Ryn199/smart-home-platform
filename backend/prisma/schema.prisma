@@ -64,9 +64,10 @@ model Room {
 // ============================================================
 
 enum DeviceType {
-  ESP32
-  ESP8266
-  GENERIC
+  CUSTOM_SENSOR
+  SMART_DOOR
+  SMART_CURTAIN
+  EXHAUST_FAN
 }
 
 enum DeviceStatus {
@@ -80,7 +81,7 @@ model Device {
   roomId     Int
   name       String
   deviceUid  String       @unique
-  type       DeviceType   @default(ESP32)
+  deviceType DeviceType   @default(CUSTOM_SENSOR)
   status     DeviceStatus @default(UNKNOWN)
   lastSeenAt DateTime?
   metadata   Json?

@@ -1,0 +1,1246 @@
+SMART HOME PLATFORM - AI CODER DEVELOPMENT PLAN
+================================================
+
+PROJECT CONTEXT
+---------------
+
+This project is a Smart Home platform for approximately:
+
+- 2 houses
+- Multiple rooms
+- Less than 10 ESP devices initially
+- ESP32-based devices
+- MQTT communication
+- NestJS + Fastify backend
+- PostgreSQL + Prisma
+- Separate Web Admin frontend
+- Flutter mobile application
+- Mosquitto MQTT broker
+
+The project intentionally avoids overengineering.
+
+Do NOT introduce Redis, Kafka, TimescaleDB, Kubernetes, microservices,
+or other infrastructure unless explicitly requested later.
+
+The backend is the central authority for:
+
+- authentication
+- homes
+- rooms
+- devices
+- device types
+- custom sensor telemetry
+- specialized device commands
+- MQTT communication
+- real-time WebSocket updates
+- automation
+
+Web Admin and Flutter must communicate with the backend API.
+They must NOT communicate directly with MQTT.
+
+================================================
+ARCHITECTURAL PRINCIPLE
+================================================
+
+The most important architecture rule is:
+
+GENERIC DEVICE MANAGEMENT
+        +
+DEVICE-SPECIFIC CAPABILITIES
+        +
+GENERIC CUSTOM SENSOR TELEMETRY
+
+Do NOT force every device into:
+
+Device -> Sensor -> SensorReading
+
+That model is only appropriate for generic/custom sensor devices.
+
+Every physical device is represented by a generic Device entity.
+
+A Device has a DeviceType.
+
+Examples:
+
+CUSTOM_SENSOR
+SMART_DOOR
+SMART_CURTAIN
+EXHAUST_FAN
+SMART_LIGHT
+SMART_PLUG
+
+The initial implementation should only implement device types actually
+needed by the project. The architecture must make it easy to add more later.
+
+================================================
+CURRENT PROJECT STATUS
+================================================
+
+The AI coder has already successfully completed:
+
+M1 - Repository + NestJS + Fastify
+M2 - Docker Compose
+M3 - PostgreSQL + Prisma
+M4 - Database schema + migrations
+M5 - Authentication
+M6 - Homes + Rooms
+
+These milestones are considered COMPLETED.
+
+DO NOT blindly rewrite them.
+
+Before M7, inspect the existing implementation and make only the changes
+required by the updated Device Type architecture.
+
+Preserve all working functionality.
+
+================================================
+UPDATED MILESTONES
+================================================
+
+M1  - Repository + NestJS + Fastify                 [COMPLETED]
+M2  - Docker Compose                                [COMPLETED]
+M3  - PostgreSQL + Prisma                           [COMPLETED]
+M4  - Database schema + migrations                  [COMPLETED]
+M5  - Authentication                                [COMPLETED]
+M6  - Homes + Rooms                                 [COMPLETED]
+
+M7  - Device Core + Device Type Architecture
+M8  - MQTT Broker Integration
+M9  - Device-Specific MQTT Routing + Message Handling
+M10 - Custom Sensor Telemetry
+M11 - Device Online/Offline State
+M12 - Specialized Device Commands
+M13 - WebSocket + Real-Time Device State
+M14 - Automation Foundation
+M15 - Swagger/API Documentation
+M16 - Security Hardening
+M17 - Tests
+M18 - MQTT Simulator
+M19 - Final Docker Verification
+M20 - Documentation Cleanup + Final Acceptance Test
+
+================================================
+MILESTONE EXECUTION RULE
+================================================
+
+Work on ONE milestone at a time.
+
+For every milestone:
+
+1. Inspect the current code.
+2. Understand existing implementation before changing it.
+3. Implement only the required scope.
+4. Do not rewrite unrelated working code.
+5. Run formatter.
+6. Run lint.
+7. Run tests.
+8. Run build.
+9. Verify runtime behavior where applicable.
+10. Fix all errors before marking the milestone complete.
+11. Update documentation where required.
+12. Report what changed.
+13. Do NOT continue to the next milestone until the current milestone is
+    verified.
+
+If a milestone is blocked, stop and report:
+
+- problem
+- current error
+- what was attempted
+- files affected
+- what remains to be fixed
+
+Do not hide failures and do not mark an unverified milestone as complete.
+
+================================================
+M1 - REPOSITORY + NESTJS + FASTIFY
+================================================
+
+STATUS: COMPLETED
+
+Existing implementation should remain functional.
+
+Expected foundation:
+
+- NestJS
+- Fastify adapter
+- TypeScript
+- ESLint
+- Prettier
+- environment configuration
+- basic project structure
+
+================================================
+M2 - DOCKER COMPOSE
+================================================
+
+STATUS: COMPLETED
+
+Existing Docker setup should remain functional.
+
+Infrastructure should remain simple.
+
+Expected services eventually include:
+
+- backend
+- PostgreSQL
+- Mosquitto
+
+Do not add unnecessary infrastructure.
+
+================================================
+M3 - POSTGRESQL + PRISMA
+================================================
+
+STATUS: COMPLETED
+
+Existing PostgreSQL and Prisma implementation should remain functional.
+
+================================================
+M4 - DATABASE SCHEMA + MIGRATIONS
+================================================
+
+STATUS: COMPLETED
+
+Existing schema and migrations should remain functional.
+
+Before M7, inspect whether the current schema needs adjustment to support
+DeviceType and specialized device architecture.
+
+If schema changes are required:
+
+- create a proper Prisma migration
+- preserve existing data where possible
+- do not destroy working data unnecessarily
+
+================================================
+M5 - AUTHENTICATION
+================================================
+
+STATUS: COMPLETED
+
+Existing authentication should remain functional.
+
+Expected foundation:
+
+- registration
+- login
+- password hashing
+- JWT
+- authenticated API access
+
+================================================
+M6 - HOMES + ROOMS
+================================================
+
+STATUS: COMPLETED
+
+Existing Homes and Rooms functionality should remain functional.
+
+Expected relationship:
+
+Home
+ |
+ +-- Rooms
+       |
+       +-- Devices
+
+================================================
+M7 - DEVICE CORE + DEVICE TYPE ARCHITECTURE
+================================================
+
+This is the most important architectural milestone.
+
+Before implementing:
+
+1. Inspect the existing Devices/Sensors schema.
+2. Inspect current services/controllers/modules.
+3. Determine what must be refactored.
+4. Preserve existing working code.
+
+------------------------------------------------
+GENERIC DEVICE ENTITY
+------------------------------------------------
+
+Every physical device must use the generic Device entity.
+
+Suggested generic fields:
+
+- id
+- roomId
+- name
+- deviceUid
+- deviceType
+- status
+- lastSeenAt
+- createdAt
+- updatedAt
+
+Additional metadata may be added only when useful.
+
+The Device entity is responsible for generic identity and ownership.
+
+It should NOT contain every possible property of every device type.
+
+------------------------------------------------
+DEVICE TYPE
+------------------------------------------------
+
+Use a controlled type-safe DeviceType.
+
+Initial examples:
+
+CUSTOM_SENSOR
+SMART_DOOR
+SMART_CURTAIN
+EXHAUST_FAN
+
+Future examples:
+
+SMART_LIGHT
+SMART_PLUG
+THERMOSTAT
+AIR_CONDITIONER
+WATER_PUMP
+IRRIGATION_CONTROLLER
+ENERGY_METER
+
+Do not implement future device types unless required.
+
+Do not use arbitrary free-form strings such as:
+
+smartdoor
+SmartDoor
+SMART_DOOR
+door
+
+Use one controlled representation.
+
+An enum is acceptable for the current project.
+
+Do not create a separate database table for every device type unless there is
+a concrete domain requirement.
+
+------------------------------------------------
+GENERIC DEVICE MODULE
+------------------------------------------------
+
+The Devices module should handle only generic device management.
+
+Responsibilities:
+
+- register device
+- update device
+- delete device
+- device UID
+- device name
+- device type
+- room assignment
+- generic status
+- lastSeenAt
+- generic metadata
+
+Do NOT put all specialized behavior inside DevicesService.
+
+Avoid code like:
+
+if SMART_DOOR ...
+if SMART_CURTAIN ...
+if EXHAUST_FAN ...
+
+throughout the generic DevicesService.
+
+------------------------------------------------
+SPECIALIZED DEVICE MODULES
+------------------------------------------------
+
+Specialized device types must have their own NestJS modules.
+
+Suggested structure:
+
+src/
+├── devices/
+├── custom-sensors/
+├── smart-door/
+├── smart-curtain/
+├── exhaust-fan/
+├── mqtt/
+├── websocket/
+└── automation/
+
+Example:
+
+smart-door/
+├── smart-door.module.ts
+├── smart-door.controller.ts
+├── smart-door.service.ts
+├── dto/
+└── ...
+
+smart-curtain/
+├── smart-curtain.module.ts
+├── smart-curtain.controller.ts
+├── smart-curtain.service.ts
+├── dto/
+└── ...
+
+exhaust-fan/
+├── exhaust-fan.module.ts
+├── exhaust-fan.controller.ts
+├── exhaust-fan.service.ts
+├── dto/
+└── ...
+
+The exact structure may be adjusted to match NestJS conventions.
+
+------------------------------------------------
+CUSTOM SENSOR
+------------------------------------------------
+
+Keep the generic:
+
+Sensor
+SensorReading
+
+models.
+
+These are intended for CUSTOM_SENSOR devices.
+
+Example:
+
+Device:
+ESP-CUSTOM-001
+deviceType = CUSTOM_SENSOR
+
+Sensors:
+
+- Temperature
+- Humidity
+- Light
+- Pressure
+
+Relationship:
+
+Device
+ |
+ +-- Sensor
+       |
+       +-- SensorReading
+
+SensorReading should store historical measurements.
+
+------------------------------------------------
+SPECIALIZED DEVICE EXAMPLES
+------------------------------------------------
+
+SMART DOOR may have:
+
+- door state
+- lock state
+- lock
+- unlock
+- RFID
+- keypad
+- other door-specific actions
+
+SMART CURTAIN may have:
+
+- open
+- close
+- stop
+- position
+- set position
+
+EXHAUST FAN may have:
+
+- power
+- speed
+- mode
+
+Do NOT force these properties into generic SensorReading.
+
+For example:
+
+Smart Curtain:
+position = 70
+
+should not automatically become:
+
+SensorReading:
+value = 70
+
+unless there is a future requirement to treat position as historical
+telemetry.
+
+For current architecture, specialized state belongs to the specialized
+device feature.
+
+------------------------------------------------
+M7 ACCEPTANCE
+------------------------------------------------
+
+M7 is complete when:
+
+- generic Device management works
+- DeviceType works
+- CUSTOM_SENSOR is supported
+- Sensor/SensorReading remains available for custom sensor devices
+- specialized device modules have clean boundaries
+- existing authentication/homes/rooms still work
+- database migrations work
+- lint passes
+- tests pass
+- build passes
+
+================================================
+M8 - MQTT BROKER INTEGRATION
+================================================
+
+Use Mosquitto as the MQTT broker.
+
+NestJS is an MQTT client/application consumer.
+
+NestJS is NOT the MQTT broker.
+
+Expected communication:
+
+ESP32 <-> Mosquitto <-> NestJS
+
+Suggested topic structure:
+
+home/{homeId}/{roomId}/{deviceUid}/telemetry
+home/{homeId}/{roomId}/{deviceUid}/state
+home/{homeId}/{roomId}/{deviceUid}/command
+home/{homeId}/{roomId}/{deviceUid}/config
+
+Example:
+
+home/home-01/living-room/esp-001/telemetry
+
+Use deviceUid in MQTT topics.
+
+Do not expose MQTT topics directly to Web Admin or Flutter.
+
+NestJS should subscribe to required topics and publish commands.
+
+================================================
+M9 - DEVICE-SPECIFIC MQTT ROUTING + MESSAGE HANDLING
+================================================
+
+Do NOT create one giant MQTT message callback containing all device logic.
+
+Expected flow:
+
+MQTT message
+    |
+    v
+MQTT service
+    |
+    v
+Resolve device by deviceUid
+    |
+    v
+Resolve deviceType
+    |
+    +----------------------+-----------------------+
+    |                      |                       |
+    v                      v                       v
+CUSTOM_SENSOR          SMART_DOOR            SMART_CURTAIN
+    |                      |                       |
+    v                      v                       v
+Sensor service        Door service          Curtain service
+
+Other device types follow the same pattern.
+
+Messages must be classified by purpose:
+
+- telemetry
+- state
+- command
+- config
+
+Payloads must be validated.
+
+Malformed MQTT messages must not crash the backend.
+
+------------------------------------------------
+CUSTOM SENSOR EXAMPLE
+------------------------------------------------
+
+Topic:
+
+home/home-01/living-room/esp-001/telemetry
+
+Payload:
+
+{
+  "temperature": 28.4,
+  "humidity": 72.1
+}
+
+------------------------------------------------
+SMART DOOR EXAMPLE
+------------------------------------------------
+
+State:
+
+{
+  "door": "closed",
+  "lock": "locked"
+}
+
+------------------------------------------------
+SMART CURTAIN EXAMPLE
+------------------------------------------------
+
+State:
+
+{
+  "position": 73,
+  "state": "opening"
+}
+
+------------------------------------------------
+EXHAUST FAN EXAMPLE
+------------------------------------------------
+
+State:
+
+{
+  "power": true,
+  "speed": 2
+}
+
+Specialized modules own their own payload validation and business rules.
+
+================================================
+M10 - CUSTOM SENSOR TELEMETRY
+================================================
+
+Implement generic sensor telemetry.
+
+Only devices that expose generic sensors should use SensorReading.
+
+Example:
+
+Device
+ |
+ +-- Sensor: temperature
+ |      |
+ |      +-- SensorReading
+ |
+ +-- Sensor: humidity
+        |
+        +-- SensorReading
+
+Implement:
+
+GET /api/devices/:deviceId/sensors
+
+GET /api/sensors/:sensorId/readings
+
+Support query parameters:
+
+from
+to
+limit
+
+Never return unlimited historical readings.
+
+Use appropriate indexes for:
+
+- sensorId
+- recordedAt
+
+For high-frequency sensor data, database queries must always support
+reasonable time ranges and limits.
+
+Do NOT add TimescaleDB at this stage.
+
+================================================
+M11 - DEVICE ONLINE/OFFLINE STATE
+================================================
+
+Use lastSeenAt as the main source of device presence.
+
+Whenever a valid MQTT telemetry or state message is received:
+
+device.lastSeenAt = current time
+
+Determine status using a configurable timeout.
+
+Example:
+
+lastSeenAt older than 60 seconds
+=> OFFLINE
+
+Do not create a database row every few seconds just to track online state.
+
+MQTT Last Will and Testament may be added later if useful, but is not
+required for the initial implementation.
+
+================================================
+M12 - SPECIALIZED DEVICE COMMANDS
+================================================
+
+Implement device commands according to DeviceType.
+
+A generic API endpoint may be:
+
+POST /api/devices/:id/commands
+
+The backend must:
+
+1. authenticate user
+2. resolve device
+3. resolve device type
+4. validate command
+5. delegate to specialized device service
+6. construct the correct MQTT topic
+7. publish MQTT command
+
+Clients must NOT provide arbitrary MQTT topics.
+
+------------------------------------------------
+SMART DOOR
+------------------------------------------------
+
+Request:
+
+{
+  "action": "unlock"
+}
+
+Possible actions:
+
+- lock
+- unlock
+
+------------------------------------------------
+SMART CURTAIN
+------------------------------------------------
+
+Request:
+
+{
+  "action": "set_position",
+  "position": 70
+}
+
+Possible actions:
+
+- open
+- close
+- stop
+- set_position
+
+Validate position range.
+
+------------------------------------------------
+EXHAUST FAN
+------------------------------------------------
+
+Request:
+
+{
+  "action": "set_speed",
+  "speed": 2
+}
+
+Possible actions may include:
+
+- on
+- off
+- set_speed
+- set_mode
+
+Validate values.
+
+------------------------------------------------
+COMMAND FLOW
+------------------------------------------------
+
+Web Admin / Flutter
+        |
+        v
+NestJS REST API
+        |
+        v
+Device Service
+        |
+        v
+MQTT
+        |
+        v
+Mosquitto
+        |
+        v
+ESP32
+
+Automation must also use the device service layer instead of constructing
+raw MQTT commands itself.
+
+================================================
+M13 - WEBSOCKET + REAL-TIME DEVICE STATE
+================================================
+
+Implement WebSocket support.
+
+Use WebSocket for:
+
+- real-time custom sensor telemetry
+- specialized device state
+- device online/offline updates
+- command status/results where applicable
+
+Example event:
+
+sensor.telemetry
+
+{
+  "deviceUid": "esp-001",
+  "sensor": "temperature",
+  "value": 28.4,
+  "recordedAt": "..."
+}
+
+Example:
+
+device.state
+
+{
+  "deviceUid": "door-001",
+  "deviceType": "SMART_DOOR",
+  "state": {
+    "door": "closed",
+    "lock": "locked"
+  }
+}
+
+Example:
+
+device.status
+
+{
+  "deviceUid": "esp-001",
+  "status": "online",
+  "lastSeenAt": "..."
+}
+
+Keep a consistent outer event structure while allowing device-specific
+state payloads.
+
+================================================
+M14 - AUTOMATION FOUNDATION
+================================================
+
+Create a simple automation foundation.
+
+Automation must eventually support both:
+
+1. generic sensor values
+2. specialized device actions
+
+Example:
+
+IF temperature > 30
+THEN exhaust fan set_speed 2
+
+Example:
+
+IF time = 22:00
+THEN smart curtain set_position 0
+
+Do NOT build a complex rule engine yet.
+
+Automation should call the device service layer.
+
+Correct:
+
+Automation
+    |
+    v
+Device Service
+    |
+    v
+MQTT
+
+Avoid:
+
+Automation
+    |
+    v
+raw MQTT topic
+
+This keeps business logic separate from MQTT transport.
+
+================================================
+M15 - SWAGGER / API DOCUMENTATION
+================================================
+
+Expose:
+
+/api/docs
+
+Document:
+
+- authentication
+- homes
+- rooms
+- devices
+- device types
+- custom sensors
+- sensor readings
+- specialized commands
+- automation
+- WebSocket events where practical
+
+Clearly document device-specific capabilities.
+
+Flutter developers should be able to understand the API without reading
+backend source code.
+
+================================================
+M16 - SECURITY HARDENING
+================================================
+
+Implement:
+
+- JWT authentication
+- secure password hashing
+- DTO validation
+- global validation pipe
+- CORS configuration
+- environment-based secrets
+- no secrets in frontend
+- no MQTT credentials in frontend
+- safe production error responses
+- reasonable rate limiting
+
+Device authentication should not rely solely on deviceUid in a production
+deployment.
+
+The initial architecture may remain simple, but should allow future
+per-device MQTT credentials or another device authentication mechanism.
+
+================================================
+M17 - TESTS
+================================================
+
+Test critical behavior.
+
+Authentication:
+
+- registration
+- login
+- invalid credentials
+
+Devices:
+
+- create device
+- duplicate device UID
+- invalid device type
+- room assignment
+
+Custom Sensors:
+
+- create sensor
+- valid telemetry
+- invalid telemetry
+- reading persistence
+
+Smart Door:
+
+- valid unlock
+- invalid command
+- state handling
+
+Smart Curtain:
+
+- valid position
+- invalid position
+- state handling
+
+Exhaust Fan:
+
+- valid speed
+- invalid speed
+- state handling
+
+MQTT:
+
+- valid message
+- malformed message
+- unknown device
+- unsupported device type
+- correct routing
+
+Authorization:
+
+- unauthenticated access
+- unauthorized access
+
+Do not chase 100% coverage.
+
+Focus on business-critical behavior.
+
+================================================
+M18 - MQTT SIMULATOR
+================================================
+
+Create a development simulator for multiple device types.
+
+At minimum:
+
+1. CUSTOM_SENSOR
+2. SMART_DOOR
+3. SMART_CURTAIN
+4. EXHAUST_FAN
+
+Simulator capabilities:
+
+CUSTOM_SENSOR:
+- publish temperature
+- publish humidity
+- publish other configured sensors
+
+SMART_DOOR:
+- publish door state
+- publish lock state
+- receive lock/unlock commands
+
+SMART_CURTAIN:
+- publish position/state
+- receive open/close/stop/set_position
+
+EXHAUST_FAN:
+- publish power/speed
+- receive power/speed commands
+
+The simulator allows backend testing without physical ESP32 hardware.
+
+================================================
+M19 - FINAL DOCKER VERIFICATION
+================================================
+
+Verify:
+
+- backend starts
+- PostgreSQL starts
+- Mosquitto starts
+- Prisma migrations work
+- persistent volumes work
+- NestJS connects to PostgreSQL
+- NestJS connects to Mosquitto
+- MQTT simulator connects
+- REST API works
+- WebSocket works
+
+Do not add additional infrastructure.
+
+================================================
+M20 - DOCUMENTATION CLEANUP + FINAL ACCEPTANCE
+================================================
+
+Update:
+
+README.md
+docs/architecture.md
+docs/api.md
+docs/mqtt.md
+docs/database.md
+
+Documentation must explain:
+
+- Device
+- DeviceType
+- Custom Sensor
+- Specialized Device
+- MQTT topic structure
+- MQTT payloads
+- device commands
+- WebSocket events
+- automation flow
+
+------------------------------------------------
+FINAL ACCEPTANCE TEST
+------------------------------------------------
+
+The complete system should support:
+
+1. Start Docker Compose.
+2. PostgreSQL starts.
+3. Mosquitto starts.
+4. NestJS starts.
+5. Prisma migrations succeed.
+6. Register/login.
+7. Create a Home.
+8. Create Rooms.
+9. Register CUSTOM_SENSOR device.
+10. Register SMART_DOOR device.
+11. Register SMART_CURTAIN device.
+12. Register EXHAUST_FAN device.
+13. Publish CUSTOM_SENSOR telemetry through MQTT.
+14. NestJS validates and stores SensorReading.
+15. Publish SMART_DOOR state.
+16. Smart Door module handles the state.
+17. Publish SMART_CURTAIN state.
+18. Smart Curtain module handles the state.
+19. Publish EXHAUST_FAN state.
+20. Exhaust Fan module handles the state.
+21. Send Smart Door unlock command through REST.
+22. Verify correct MQTT command topic.
+23. Send Smart Curtain position command.
+24. Send Exhaust Fan speed command.
+25. Verify specialized command validation.
+26. Verify WebSocket events.
+27. Verify lastSeenAt.
+28. Verify online/offline state.
+29. Query historical custom sensor readings.
+30. Swagger works.
+31. Tests pass.
+32. MQTT simulator works.
+33. Docker Compose can restart without losing persistent data.
+
+================================================
+DEVICE TYPE ARCHITECTURE RULES
+================================================
+
+RULE 1:
+Every physical device is represented by the generic Device entity.
+
+RULE 2:
+Every Device has a controlled DeviceType.
+
+RULE 3:
+Generic device management belongs to the Devices module.
+
+RULE 4:
+Specialized behavior belongs to specialized NestJS modules.
+
+RULE 5:
+CUSTOM_SENSOR uses Sensor + SensorReading.
+
+RULE 6:
+Specialized device state must NOT automatically become SensorReading.
+
+RULE 7:
+Specialized commands must be validated by the specialized module.
+
+RULE 8:
+MQTT routing resolves the device and delegates based on DeviceType.
+
+RULE 9:
+Do not create a database table for every device type without a concrete
+requirement.
+
+RULE 10:
+Do not put all device-specific behavior inside DevicesService.
+
+RULE 11:
+Automation calls device services rather than constructing raw MQTT topics.
+
+RULE 12:
+Web Admin and Flutter communicate with backend APIs, not directly with MQTT.
+
+RULE 13:
+MQTT topic structure remains consistent across device types.
+
+RULE 14:
+Device-specific payloads may differ but must be validated and documented.
+
+RULE 15:
+Adding a new device type should preferably require a focused module rather
+than changes throughout the entire codebase.
+
+================================================
+ADDING A FUTURE SPECIALIZED DEVICE
+================================================
+
+For a new device type:
+
+1. Add DeviceType.
+2. Create specialized NestJS module.
+3. Define state DTO/schema.
+4. Define command DTO/schema.
+5. Implement service.
+6. Register MQTT routing.
+7. Add API documentation.
+8. Add tests.
+9. Add simulator support if useful.
+
+Do not modify unrelated modules unnecessarily.
+
+================================================
+DEFINITION OF DONE
+================================================
+
+The initial architecture is complete when:
+
+- NestJS + Fastify works
+- PostgreSQL works
+- Prisma works
+- Mosquitto works
+- JWT authentication works
+- Homes work
+- Rooms work
+- Generic Devices work
+- DeviceType system works
+- CUSTOM_SENSOR works
+- Sensor + SensorReading works
+- Smart Door architecture works
+- Smart Curtain architecture works
+- Exhaust Fan architecture works
+- MQTT routing works by device type
+- specialized commands work
+- device state works
+- lastSeenAt works
+- WebSocket works
+- Swagger works
+- Web Admin can consume the backend API
+- Flutter has documented API contracts
+- Docker Compose works
+- tests pass
+- documentation is complete
+- no unnecessary infrastructure has been introduced
+
+================================================
+FINAL INSTRUCTION TO AI CODER
+================================================
+
+The project is intentionally small:
+
+- 2 houses
+- less than 10 ESP devices initially
+- multiple rooms
+
+Build clean, maintainable, production-quality application code, but keep
+infrastructure simple.
+
+Do not over-engineer.
+
+The core architectural principle is:
+
+GENERIC DEVICE MANAGEMENT
++
+DEVICE-SPECIFIC CAPABILITIES
++
+GENERIC CUSTOM SENSOR TELEMETRY
+
+Do NOT force Smart Door, Smart Curtain, Exhaust Fan, or other specialized
+devices into the generic Sensor + SensorReading model.
+
+When a specialized device is needed, prefer a focused NestJS module with its
+own service, DTOs, state handling, command validation, and MQTT handling.
+
+Use NestJS + PostgreSQL + Prisma + Mosquitto unless there is a concrete
+technical reason to change.
+
+The AI coder must inspect existing code before refactoring.
+
+M1-M6 are already completed and working.
+
+Do not rebuild completed milestones from scratch.
+
+Keep the repository runnable after every milestone.
