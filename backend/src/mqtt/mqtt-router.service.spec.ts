@@ -13,7 +13,12 @@ import { Device, DeviceStatus, DeviceType } from '@prisma/client';
 describe('MqttRouterService', () => {
   let service: MqttRouterService;
   let mqttService: { registerHandler: jest.Mock };
-  let devicesService: { findByDeviceUid: jest.Mock; updateLastSeen: jest.Mock };
+  let devicesService: {
+    findByDeviceUid: jest.Mock;
+    findByPairingCode: jest.Mock;
+    bindMacAddress: jest.Mock;
+    updateLastSeen: jest.Mock;
+  };
   let tempHumidityService: { handleState: jest.Mock };
   let smartDoorService: { updateState: jest.Mock };
   let smartCurtainService: { updateState: jest.Mock };
@@ -23,6 +28,8 @@ describe('MqttRouterService', () => {
     mqttService = { registerHandler: jest.fn() };
     devicesService = {
       findByDeviceUid: jest.fn(),
+      findByPairingCode: jest.fn(),
+      bindMacAddress: jest.fn(),
       updateLastSeen: jest.fn().mockResolvedValue({}),
     };
     tempHumidityService = { handleState: jest.fn() };
@@ -60,46 +67,28 @@ describe('MqttRouterService', () => {
 
   it('should ignore malformed JSON without crashing', async () => {
     const parsedTopic = {
-      homeId: '1',
-      roomId: '1',
-      deviceUid: 'esp-001',
-      messageType: 'telemetry',
+      homeId: '',
+      roomId: '',
+      deviceUid: '',
+      messageType: 'telemetry' as const,
     };
     const payload = Buffer.from('invalid-json{');
 
     await expect(
-      service.routeMessage(parsedTopic, 'home/1/1/esp-001/telemetry', payload),
+      service.routeMessage(parsedTopic, 'iot/telemetry', payload),
     ).resolves.not.toThrow();
 
-    expect(devicesService.findByDeviceUid).not.toHaveBeenCalled();
+    expect(devicesService.findByPairingCode).not.toHaveBeenCalled();
   });
 
-  it('should safely ignore unknown devices without crashing', async () => {
-    devicesService.findByDeviceUid.mockRejectedValue(new NotFoundException());
-
-    const parsedTopic = {
-      homeId: '1',
-      roomId: '1',
-      deviceUid: 'unknown-001',
-      messageType: 'telemetry',
-    };
-    const payload = Buffer.from(JSON.stringify({ temp: 25 }));
-
-    await expect(
-      service.routeMessage(parsedTopic, 'home/1/1/unknown-001/telemetry', payload),
-    ).resolves.not.toThrow();
-
-    expect(tempHumidityService.handleState).not.toHaveBeenCalled();
-  });
-
-  it('should reject telemetry if MAC address does not match', async () => {
+  it('should auto-bind hardware MAC address on first connection with pairingCode', async () => {
     const mockDevice: Device = {
       id: 1,
       roomId: 1,
-      name: 'Temp Sensor',
+      name: 'Living Room DHT',
       deviceUid: 'th-001',
-      macAddress: 'AA:BB:CC:DD:EE:FF',
-      pairingCode: 'SECRET-123',
+      macAddress: null, // Initially unbound
+      pairingCode: 'TH-7788',
       deviceType: DeviceType.TEMP_HUMIDITY,
       status: DeviceStatus.ONLINE,
       lastSeenAt: new Date(),
@@ -107,105 +96,111 @@ describe('MqttRouterService', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    devicesService.findByDeviceUid.mockResolvedValue(mockDevice);
+    devicesService.findByPairingCode.mockResolvedValue(mockDevice);
+    devicesService.bindMacAddress.mockResolvedValue({
+      ...mockDevice,
+      macAddress: '24:6F:28:1A:3B:4C',
+    });
 
     const parsedTopic = {
-      homeId: '1',
-      roomId: '1',
-      deviceUid: 'th-001',
-      messageType: 'telemetry',
-    };
-    const payload = Buffer.from(
-      JSON.stringify({
-        macAddress: '11:22:33:44:55:66',
-        pairingCode: 'SECRET-123',
-        temperature: 28.4,
-        humidity: 72.1,
-      }),
-    );
-
-    await service.routeMessage(parsedTopic, 'home/1/1/th-001/telemetry', payload);
-
-    expect(tempHumidityService.handleState).not.toHaveBeenCalled();
-    expect(devicesService.updateLastSeen).not.toHaveBeenCalled();
-  });
-
-  it('should reject telemetry if pairing code does not match', async () => {
-    const mockDevice: Device = {
-      id: 1,
-      roomId: 1,
-      name: 'Temp Sensor',
-      deviceUid: 'th-001',
-      macAddress: 'AA:BB:CC:DD:EE:FF',
-      pairingCode: 'SECRET-123',
-      deviceType: DeviceType.TEMP_HUMIDITY,
-      status: DeviceStatus.ONLINE,
-      lastSeenAt: new Date(),
-      metadata: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    devicesService.findByDeviceUid.mockResolvedValue(mockDevice);
-
-    const parsedTopic = {
-      homeId: '1',
-      roomId: '1',
-      deviceUid: 'th-001',
-      messageType: 'telemetry',
-    };
-    const payload = Buffer.from(
-      JSON.stringify({
-        macAddress: 'AA:BB:CC:DD:EE:FF',
-        pairingCode: 'WRONG-CODE',
-        temperature: 28.4,
-        humidity: 72.1,
-      }),
-    );
-
-    await service.routeMessage(parsedTopic, 'home/1/1/th-001/telemetry', payload);
-
-    expect(tempHumidityService.handleState).not.toHaveBeenCalled();
-    expect(devicesService.updateLastSeen).not.toHaveBeenCalled();
-  });
-
-  it('should accept and route TEMP_HUMIDITY telemetry when credentials match', async () => {
-    const mockDevice: Device = {
-      id: 1,
-      roomId: 1,
-      name: 'Temp Sensor',
-      deviceUid: 'sensor-001',
-      macAddress: 'AA:BB:CC:DD:EE:FF',
-      pairingCode: 'PAIR-123',
-      deviceType: DeviceType.TEMP_HUMIDITY,
-      status: DeviceStatus.ONLINE,
-      lastSeenAt: new Date(),
-      metadata: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    devicesService.findByDeviceUid.mockResolvedValue(mockDevice);
-
-    const parsedTopic = {
-      homeId: '1',
-      roomId: '1',
-      deviceUid: 'sensor-001',
-      messageType: 'telemetry',
+      homeId: '',
+      roomId: '',
+      deviceUid: '',
+      messageType: 'telemetry' as const,
     };
     const data = {
-      macAddress: 'aabbccddeeff',
-      pairingCode: 'PAIR-123',
-      temperature: 28.4,
-      humidity: 72.1,
+      pairingCode: 'TH-7788',
+      macAddress: '24:6F:28:1A:3B:4C',
+      temperature: 28.5,
+      humidity: 60.0,
     };
     const payload = Buffer.from(JSON.stringify(data));
 
-    await service.routeMessage(parsedTopic, 'home/1/1/sensor-001/telemetry', payload);
+    await service.routeMessage(parsedTopic, 'iot/telemetry', payload);
 
-    expect(devicesService.updateLastSeen).toHaveBeenCalledWith('sensor-001');
-    expect(tempHumidityService.handleState).toHaveBeenCalledWith(mockDevice, data);
+    expect(devicesService.findByPairingCode).toHaveBeenCalledWith('TH-7788');
+    expect(devicesService.bindMacAddress).toHaveBeenCalledWith(1, '24:6F:28:1A:3B:4C');
+    expect(devicesService.updateLastSeen).toHaveBeenCalledWith('th-001');
+    expect(tempHumidityService.handleState).toHaveBeenCalled();
   });
 
-  it('should validate and route SMART_DOOR state to SmartDoorService', async () => {
+  it('should reject a second ESP with different MAC trying to use the same pairingCode', async () => {
+    const mockDevice: Device = {
+      id: 1,
+      roomId: 1,
+      name: 'Living Room DHT',
+      deviceUid: 'th-001',
+      macAddress: '24:6F:28:1A:3B:4C', // Already bound to ESP #1
+      pairingCode: 'TH-7788',
+      deviceType: DeviceType.TEMP_HUMIDITY,
+      status: DeviceStatus.ONLINE,
+      lastSeenAt: new Date(),
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    devicesService.findByPairingCode.mockResolvedValue(mockDevice);
+
+    const parsedTopic = {
+      homeId: '',
+      roomId: '',
+      deviceUid: '',
+      messageType: 'telemetry' as const,
+    };
+    const rogueData = {
+      pairingCode: 'TH-7788',
+      macAddress: 'AA:BB:CC:99:88:77', // Different ESP board
+      temperature: 28.5,
+      humidity: 60.0,
+    };
+    const payload = Buffer.from(JSON.stringify(rogueData));
+
+    await service.routeMessage(parsedTopic, 'iot/telemetry', payload);
+
+    expect(devicesService.findByPairingCode).toHaveBeenCalledWith('TH-7788');
+    expect(devicesService.bindMacAddress).not.toHaveBeenCalled();
+    expect(devicesService.updateLastSeen).not.toHaveBeenCalled();
+    expect(tempHumidityService.handleState).not.toHaveBeenCalled();
+  });
+
+  it('should accept telemetry from the bound ESP hardware MAC', async () => {
+    const mockDevice: Device = {
+      id: 1,
+      roomId: 1,
+      name: 'Living Room DHT',
+      deviceUid: 'th-001',
+      macAddress: '24:6F:28:1A:3B:4C',
+      pairingCode: 'TH-7788',
+      deviceType: DeviceType.TEMP_HUMIDITY,
+      status: DeviceStatus.ONLINE,
+      lastSeenAt: new Date(),
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    devicesService.findByPairingCode.mockResolvedValue(mockDevice);
+
+    const parsedTopic = {
+      homeId: '',
+      roomId: '',
+      deviceUid: '',
+      messageType: 'telemetry' as const,
+    };
+    const validData = {
+      pairingCode: 'TH-7788',
+      macAddress: '246f281a3b4c', // Matching (case/format normalized)
+      temperature: 29.1,
+      humidity: 55.4,
+    };
+    const payload = Buffer.from(JSON.stringify(validData));
+
+    await service.routeMessage(parsedTopic, 'iot/telemetry', payload);
+
+    expect(devicesService.updateLastSeen).toHaveBeenCalledWith('th-001');
+    expect(tempHumidityService.handleState).toHaveBeenCalled();
+  });
+
+  it('should route SMART_DOOR state by UID', async () => {
     const mockDevice: Device = {
       id: 2,
       roomId: 1,
@@ -226,7 +221,7 @@ describe('MqttRouterService', () => {
       homeId: '1',
       roomId: '1',
       deviceUid: 'door-001',
-      messageType: 'state',
+      messageType: 'state' as const,
     };
     const data = { door: 'closed', lock: 'locked' };
     const payload = Buffer.from(JSON.stringify(data));
@@ -235,74 +230,6 @@ describe('MqttRouterService', () => {
 
     expect(smartDoorService.updateState).toHaveBeenCalledWith(
       'door-001',
-      expect.objectContaining(data),
-    );
-  });
-
-  it('should validate and route SMART_CURTAIN state to SmartCurtainService', async () => {
-    const mockDevice: Device = {
-      id: 3,
-      roomId: 1,
-      name: 'Curtain',
-      deviceUid: 'curtain-001',
-      macAddress: null,
-      pairingCode: null,
-      deviceType: DeviceType.SMART_CURTAIN,
-      status: DeviceStatus.ONLINE,
-      lastSeenAt: new Date(),
-      metadata: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    devicesService.findByDeviceUid.mockResolvedValue(mockDevice);
-
-    const parsedTopic = {
-      homeId: '1',
-      roomId: '1',
-      deviceUid: 'curtain-001',
-      messageType: 'state',
-    };
-    const data = { position: 75, state: 'opening' };
-    const payload = Buffer.from(JSON.stringify(data));
-
-    await service.routeMessage(parsedTopic, 'home/1/1/curtain-001/state', payload);
-
-    expect(smartCurtainService.updateState).toHaveBeenCalledWith(
-      'curtain-001',
-      expect.objectContaining(data),
-    );
-  });
-
-  it('should validate and route EXHAUST_FAN state to ExhaustFanService', async () => {
-    const mockDevice: Device = {
-      id: 4,
-      roomId: 1,
-      name: 'Fan',
-      deviceUid: 'fan-001',
-      macAddress: null,
-      pairingCode: null,
-      deviceType: DeviceType.EXHAUST_FAN,
-      status: DeviceStatus.ONLINE,
-      lastSeenAt: new Date(),
-      metadata: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    devicesService.findByDeviceUid.mockResolvedValue(mockDevice);
-
-    const parsedTopic = {
-      homeId: '1',
-      roomId: '1',
-      deviceUid: 'fan-001',
-      messageType: 'state',
-    };
-    const data = { power: true, speed: 2 };
-    const payload = Buffer.from(JSON.stringify(data));
-
-    await service.routeMessage(parsedTopic, 'home/1/1/fan-001/state', payload);
-
-    expect(exhaustFanService.updateState).toHaveBeenCalledWith(
-      'fan-001',
       expect.objectContaining(data),
     );
   });

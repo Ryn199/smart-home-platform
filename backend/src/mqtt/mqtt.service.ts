@@ -44,8 +44,9 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         this.connected = true;
         this.logger.log('Connected to MQTT broker successfully.');
 
-        // Subscribe to root topic for all smart home devices
+        // Subscribe to root topic for all smart home devices and simple IoT telemetry
         this.subscribe('home/#');
+        this.subscribe('iot/#');
       });
 
       this.client.on('reconnect', () => {
@@ -57,11 +58,6 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
           this.connected = false;
           this.logger.warn('MQTT connection closed.');
         }
-      });
-
-      this.client.on('offline', () => {
-        this.connected = false;
-        this.logger.warn('MQTT client is offline.');
       });
 
       this.client.on('error', (err) => {
@@ -78,12 +74,10 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   async disconnect(): Promise<void> {
-    if (this.client) {
-      this.logger.log('Disconnecting from MQTT broker...');
+    if (this.client && this.connected) {
       return new Promise<void>((resolve) => {
-        this.client?.end(true, {}, () => {
+        this.client?.end(false, () => {
           this.connected = false;
-          this.client = null;
           this.logger.log('Disconnected from MQTT broker.');
           resolve();
         });
@@ -152,20 +146,42 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Parses standard topic format: home/{homeId}/{roomId}/{deviceUid}/{messageType}
+   * Parses topic format:
+   * - home/{homeId}/{roomId}/{deviceUid}/{messageType}
+   * - iot/telemetry or iot/{messageType}
+   * - iot/{pairingCode}/telemetry
    */
   parseTopic(topic: string): ParsedMqttTopic | null {
     const parts = topic.split('/');
-    if (parts.length < 5 || parts[0] !== 'home') {
-      return null;
+    if (parts.length >= 5 && parts[0] === 'home') {
+      return {
+        homeId: parts[1],
+        roomId: parts[2],
+        deviceUid: parts[3],
+        messageType: parts[4] as MqttMessageType,
+      };
     }
 
-    return {
-      homeId: parts[1],
-      roomId: parts[2],
-      deviceUid: parts[3],
-      messageType: parts[4] as MqttMessageType,
-    };
+    if (parts[0] === 'iot') {
+      if (parts.length === 2) {
+        return {
+          homeId: '',
+          roomId: '',
+          deviceUid: '',
+          messageType: parts[1] as MqttMessageType,
+        };
+      }
+      if (parts.length >= 3) {
+        return {
+          homeId: '',
+          roomId: '',
+          deviceUid: parts[1],
+          messageType: parts[2] as MqttMessageType,
+        };
+      }
+    }
+
+    return null;
   }
 
   private handleIncomingMessage(topic: string, payload: Buffer): void {

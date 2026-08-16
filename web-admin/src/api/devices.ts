@@ -77,4 +77,9 @@ export const devicesApi = {
 
   getCommands: (id: number, limit = 20): Promise<DeviceCommand[]> =>
     apiClient<DeviceCommand[]>(`/devices/${id}/commands?limit=${limit}`),
+
+  resetAuth: (id: number): Promise<{ message: string; device: Device }> =>
+    apiClient<{ message: string; device: Device }>(`/devices/${id}/reset-auth`, {
+      method: 'POST',
+    }),
 };

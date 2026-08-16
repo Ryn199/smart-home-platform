@@ -1,94 +1,96 @@
 import {
-  BadRequestException,
-  ConflictException,
-  forwardRef,
-  Inject,
   Injectable,
   NotFoundException,
+  ConflictException,
+  BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { RoomsService } from '../rooms/rooms.service';
+import { CreateDeviceDto } from './dto/create-device.dto';
+import { UpdateDeviceDto } from './dto/update-device.dto';
+import { ExecuteCommandDto } from './dto/execute-command.dto';
 import { MqttService } from '../mqtt/mqtt.service';
 import { EventsGateway } from '../websocket/events.gateway';
 import { SmartDoorService } from '../smart-door/smart-door.service';
 import { SmartCurtainService } from '../smart-curtain/smart-curtain.service';
 import { ExhaustFanService } from '../exhaust-fan/exhaust-fan.service';
-import { CreateDeviceDto } from './dto/create-device.dto';
-import { UpdateDeviceDto } from './dto/update-device.dto';
-import { ExecuteCommandDto } from './dto/execute-command.dto';
 import {
-  CommandStatus,
   Device,
-  DeviceCommand,
   DeviceStatus,
   DeviceType,
+  DeviceCommand,
+  CommandStatus,
   Prisma,
+  Room,
+  Home,
 } from '@prisma/client';
 
-export interface DevicePresenceInfo {
-  id: number;
-  deviceUid: string;
-  name: string;
-  status: DeviceStatus;
-  lastSeenAt: Date | null;
-  thresholdSeconds: number;
-  secondsSinceLastSeen: number | null;
-}
+export const OFFLINE_THRESHOLD_MS = 60 * 1000; // 60 seconds
 
 @Injectable()
 export class DevicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly roomsService: RoomsService,
-    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => MqttService))
     private readonly mqttService: MqttService,
     private readonly eventsGateway: EventsGateway,
-    @Inject(forwardRef(() => SmartDoorService))
     private readonly smartDoorService: SmartDoorService,
-    @Inject(forwardRef(() => SmartCurtainService))
     private readonly smartCurtainService: SmartCurtainService,
-    @Inject(forwardRef(() => ExhaustFanService))
     private readonly exhaustFanService: ExhaustFanService,
   ) {}
 
-  getOfflineThresholdSeconds(): number {
-    const raw = this.configService.get<string | number>('DEVICE_OFFLINE_THRESHOLD_SECONDS', 60);
-    return typeof raw === 'number' ? raw : parseInt(String(raw), 10) || 60;
-  }
-
-  calculateStatus(lastSeenAt: Date | null): DeviceStatus {
-    if (!lastSeenAt) {
+  private computeStatus(device: {
+    status: DeviceStatus;
+    lastSeenAt: Date | null;
+  }): DeviceStatus {
+    if (!device.lastSeenAt) {
       return DeviceStatus.UNKNOWN;
     }
-
-    const diffMs = Date.now() - new Date(lastSeenAt).getTime();
-    const thresholdMs = this.getOfflineThresholdSeconds() * 1000;
-
-    return diffMs <= thresholdMs ? DeviceStatus.ONLINE : DeviceStatus.OFFLINE;
+    const elapsed = Date.now() - new Date(device.lastSeenAt).getTime();
+    if (elapsed > OFFLINE_THRESHOLD_MS) {
+      return DeviceStatus.OFFLINE;
+    }
+    return DeviceStatus.ONLINE;
   }
 
-  private attachComputedStatus<T extends Device>(device: T): T {
+  private attachComputedStatus<T extends { status: DeviceStatus; lastSeenAt: Date | null }>(
+    device: T,
+  ): T {
     return {
       ...device,
-      status: this.calculateStatus(device.lastSeenAt),
+      status: this.computeStatus(device),
     };
   }
 
   async create(dto: CreateDeviceDto): Promise<Device> {
-    // 1. Validate room exists
+    // 1. Check if room exists
     await this.roomsService.findOne(dto.roomId);
 
     // 2. Check if deviceUid is already taken
-    const existing = await this.prisma.device.findUnique({
+    const existingUid = await this.prisma.device.findUnique({
       where: { deviceUid: dto.deviceUid },
     });
 
-    if (existing) {
+    if (existingUid) {
       throw new ConflictException(`Device with UID "${dto.deviceUid}" is already registered`);
     }
 
-    // 3. Create device
+    // 3. Check if pairingCode is already in use
+    if (dto.pairingCode && dto.pairingCode.trim()) {
+      const existingPairing = await this.prisma.device.findFirst({
+        where: { pairingCode: dto.pairingCode.trim() },
+      });
+      if (existingPairing) {
+        throw new ConflictException(
+          `Pairing code "${dto.pairingCode.trim()}" is already assigned to device "${existingPairing.name}"`,
+        );
+      }
+    }
+
+    // 4. Create device
     const device = await this.prisma.device.create({
       data: {
         roomId: dto.roomId,
@@ -122,7 +124,6 @@ export class DevicesService {
     if (filter?.roomId) {
       where.roomId = filter.roomId;
     }
-
     if (filter?.deviceType) {
       where.deviceType = filter.deviceType;
     }
@@ -142,16 +143,20 @@ export class DevicesService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const computed = devices.map((d) => this.attachComputedStatus(d));
+    const withComputed = devices.map((d: Device & { room?: unknown; _count?: unknown }) =>
+      this.attachComputedStatus(d),
+    );
 
     if (filter?.status) {
-      return computed.filter((d) => d.status === filter.status);
+      return withComputed.filter(
+        (d: Device & { room?: unknown; _count?: unknown }) => d.status === filter.status,
+      ) as unknown as Device[];
     }
 
-    return computed;
+    return withComputed as unknown as Device[];
   }
 
-  async findOne(id: number): Promise<Device> {
+  async findOne(id: number): Promise<Device & { room: Room & { home: Home } }> {
     const device = await this.prisma.device.findUnique({
       where: { id },
       include: {
@@ -159,6 +164,10 @@ export class DevicesService {
           include: {
             home: true,
           },
+        },
+        commands: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
         },
       },
     });
@@ -170,7 +179,9 @@ export class DevicesService {
     return this.attachComputedStatus(device);
   }
 
-  async findByDeviceUid(deviceUid: string): Promise<Device> {
+  async findByDeviceUid(
+    deviceUid: string,
+  ): Promise<Device & { room: Room & { home: Home } }> {
     const device = await this.prisma.device.findUnique({
       where: { deviceUid },
       include: {
@@ -189,42 +200,79 @@ export class DevicesService {
     return this.attachComputedStatus(device);
   }
 
-  async findByRoomId(roomId: number): Promise<Device[]> {
-    // Validate room exists
-    await this.roomsService.findOne(roomId);
-
-    const devices = await this.prisma.device.findMany({
-      where: { roomId },
+  async findByPairingCode(
+    pairingCode: string,
+  ): Promise<(Device & { room: Room & { home: Home } }) | null> {
+    const device = await this.prisma.device.findFirst({
+      where: { pairingCode: pairingCode.trim() },
       include: {
-        _count: {
-          select: { commands: true },
+        room: {
+          include: {
+            home: true,
+          },
         },
       },
-      orderBy: { createdAt: 'asc' },
     });
 
-    return devices.map((d) => this.attachComputedStatus(d));
+    if (!device) return null;
+    return this.attachComputedStatus(device);
   }
 
-  async getPresence(id: number): Promise<DevicePresenceInfo> {
+  async bindMacAddress(
+    id: number,
+    macAddress: string,
+  ): Promise<Device & { room: Room & { home: Home } }> {
+    const updated = await this.prisma.device.update({
+      where: { id },
+      data: {
+        macAddress: macAddress.trim(),
+      },
+      include: {
+        room: {
+          include: {
+            home: true,
+          },
+        },
+      },
+    });
+
+    return this.attachComputedStatus(updated);
+  }
+
+  async resetAuth(id: number): Promise<Device & { room: Room & { home: Home } }> {
+    await this.findOne(id);
+
+    const updated = await this.prisma.device.update({
+      where: { id },
+      data: {
+        macAddress: null,
+      },
+      include: {
+        room: {
+          include: {
+            home: true,
+          },
+        },
+      },
+    });
+
+    return this.attachComputedStatus(updated);
+  }
+
+  async getPresenceInfo(id: number): Promise<{
+    id: number;
+    deviceUid: string;
+    name: string;
+    status: DeviceStatus;
+    lastSeenAt: Date | null;
+  }> {
     const device = await this.findOne(id);
-    const thresholdSeconds = this.getOfflineThresholdSeconds();
-
-    let secondsSinceLastSeen: number | null = null;
-    if (device.lastSeenAt) {
-      secondsSinceLastSeen = Math.floor(
-        (Date.now() - new Date(device.lastSeenAt).getTime()) / 1000,
-      );
-    }
-
     return {
       id: device.id,
       deviceUid: device.deviceUid,
       name: device.name,
       status: device.status,
       lastSeenAt: device.lastSeenAt,
-      thresholdSeconds,
-      secondsSinceLastSeen,
     };
   }
 
@@ -233,6 +281,21 @@ export class DevicesService {
 
     if (dto.roomId) {
       await this.roomsService.findOne(dto.roomId);
+    }
+
+    // Check pairingCode conflict with other devices
+    if (dto.pairingCode && dto.pairingCode.trim()) {
+      const conflict = await this.prisma.device.findFirst({
+        where: {
+          pairingCode: dto.pairingCode.trim(),
+          NOT: { id },
+        },
+      });
+      if (conflict) {
+        throw new ConflictException(
+          `Pairing code "${dto.pairingCode.trim()}" is already assigned to device "${conflict.name}"`,
+        );
+      }
     }
 
     const data: Prisma.DeviceUpdateInput = {};

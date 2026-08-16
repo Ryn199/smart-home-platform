@@ -4,7 +4,7 @@
 // SMART HOME PLATFORM - IOT NODE CONFIGURATION (DHT22)
 // ============================================================
 
-// 1. WiFi Credentials
+// 1. WiFi Network Credentials
 #define WIFI_SSID       "YOUR_WIFI_SSID"
 #define WIFI_PASSWORD   "YOUR_WIFI_PASSWORD"
 
@@ -14,13 +14,12 @@
 #define MQTT_USER       ""                // Leave blank if no auth
 #define MQTT_PASSWORD   ""                // Leave blank if no auth
 
-// 3. Device Identification & Security
-#define HOME_ID         "1"               // ID of the Home in database
-#define ROOM_ID         "1"               // ID of the Room in database
-#define DEVICE_UID      "th-001"          // Unique UID registered in Admin Panel
-#define PAIRING_CODE    "TH-7788"         // Secret pairing token (matches Admin Panel)
+// 3. Hardware Authentication (Pairing Code)
+// Matches the "Pairing Code" entered when registering the device in Web Admin.
+// No deviceUid, homeId, or roomId needed in firmware.
+#define PAIRING_CODE    "TH-7788"
 
-// 4. Hardware Pinout & Sensor Type
+// 4. Hardware Pinout & Sensor Type (DHT22)
 #if defined(ESP8266)
   #define DHTPIN        2                 // GPIO2 (Pin D4 on NodeMCU / Pin IO2 on ESP-01)
 #elif defined(ESP32)

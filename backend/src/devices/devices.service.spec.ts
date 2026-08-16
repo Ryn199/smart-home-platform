@@ -21,6 +21,7 @@ describe('DevicesService', () => {
       create: jest.Mock;
       findMany: jest.Mock;
       findUnique: jest.Mock;
+      findFirst: jest.Mock;
       update: jest.Mock;
       delete: jest.Mock;
     };
@@ -55,6 +56,7 @@ describe('DevicesService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
       },
@@ -205,6 +207,74 @@ describe('DevicesService', () => {
 
       await expect(service.executeCommand(999, { action: 'unlock' })).rejects.toThrow(
         NotFoundException,
+      );
+    });
+  });
+
+  describe('Hardware Authentication & Pairing', () => {
+    it('should find device by pairing code', async () => {
+      const mockDevice = {
+        id: 1,
+        name: 'Sensor 1',
+        deviceUid: 'th-001',
+        pairingCode: 'TH-7788',
+        macAddress: null,
+        status: 'ONLINE',
+        lastSeenAt: new Date(),
+      };
+      prisma.device.findFirst = jest.fn().mockResolvedValue(mockDevice);
+
+      const result = await service.findByPairingCode('TH-7788');
+      expect(result).toBeDefined();
+      expect(result?.pairingCode).toBe('TH-7788');
+      expect(prisma.device.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { pairingCode: 'TH-7788' } }),
+      );
+    });
+
+    it('should bind hardware MAC address', async () => {
+      const mockDevice = {
+        id: 1,
+        name: 'Sensor 1',
+        deviceUid: 'th-001',
+        macAddress: '24:6F:28:1A:3B:4C',
+        status: 'ONLINE',
+        lastSeenAt: new Date(),
+      };
+      prisma.device.update.mockResolvedValue(mockDevice);
+
+      const result = await service.bindMacAddress(1, '24:6F:28:1A:3B:4C');
+      expect(result.macAddress).toBe('24:6F:28:1A:3B:4C');
+      expect(prisma.device.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: { macAddress: '24:6F:28:1A:3B:4C' },
+        }),
+      );
+    });
+
+    it('should reset auth by setting macAddress to null', async () => {
+      const mockDevice = {
+        id: 1,
+        name: 'Sensor 1',
+        deviceUid: 'th-001',
+        macAddress: '24:6F:28:1A:3B:4C',
+        status: 'ONLINE',
+        lastSeenAt: new Date(),
+      };
+      prisma.device.findUnique.mockResolvedValue(mockDevice);
+      prisma.device.update.mockResolvedValue({
+        ...mockDevice,
+        macAddress: null,
+      });
+
+      const result = await service.resetAuth(1);
+      expect(result.macAddress).toBeNull();
+      expect(prisma.device.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: { macAddress: null },
+        }),
       );
     });
   });

@@ -12,8 +12,10 @@ export const DevicesPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
   const [deviceToDelete, setDeviceToDelete] = useState<Device | null>(null);
+  const [deviceToResetAuth, setDeviceToResetAuth] = useState<Device | null>(null);
   const [historyDeviceId, setHistoryDeviceId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Form states
   const [name, setName] = useState('');
@@ -49,6 +51,8 @@ export const DevicesPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       closeModal();
+      setSuccessMessage('Device registered successfully! Flash the pairing code to your ESP.');
+      setTimeout(() => setSuccessMessage(null), 5000);
     },
     onError: (err: any) => {
       setErrorMessage(err?.message || 'Failed to register device');
@@ -66,6 +70,8 @@ export const DevicesPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       closeModal();
+      setSuccessMessage('Device updated successfully!');
+      setTimeout(() => setSuccessMessage(null), 5000);
     },
     onError: (err: any) => {
       setErrorMessage(err?.message || 'Failed to update device');
@@ -77,6 +83,8 @@ export const DevicesPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       setDeviceToDelete(null);
+      setSuccessMessage('Device deleted successfully.');
+      setTimeout(() => setSuccessMessage(null), 5000);
     },
     onError: (err: any) => {
       setErrorMessage(`Delete failed: ${err?.message || 'Unknown error'}`);
@@ -84,12 +92,27 @@ export const DevicesPage: React.FC = () => {
     },
   });
 
+  const resetAuthMutation = useMutation({
+    mutationFn: (id: number) => devicesApi.resetAuth(id),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      setDeviceToResetAuth(null);
+      setSuccessMessage(res.message || 'Device authentication reset. You can now pair a new ESP board.');
+      setTimeout(() => setSuccessMessage(null), 6000);
+    },
+    onError: (err: any) => {
+      setErrorMessage(`Reset auth failed: ${err?.message || 'Unknown error'}`);
+      setDeviceToResetAuth(null);
+    },
+  });
+
   const openCreateModal = () => {
     setEditingDevice(null);
     setName('');
-    setDeviceUid('');
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    setDeviceUid(`th-${randomSuffix}`);
     setMacAddress('');
-    setPairingCode('');
+    setPairingCode(`TH-${randomSuffix}`);
     setDeviceType('TEMP_HUMIDITY');
     if (allRooms.length > 0) setRoomId(allRooms[0].id);
     setErrorMessage(null);
@@ -157,6 +180,12 @@ export const DevicesPage: React.FC = () => {
     }
   };
 
+  const handleConfirmResetAuth = () => {
+    if (deviceToResetAuth) {
+      resetAuthMutation.mutate(deviceToResetAuth.id);
+    }
+  };
+
   return (
     <div className="space-y-lg">
       {/* Header */}
@@ -166,7 +195,7 @@ export const DevicesPage: React.FC = () => {
             Devices Inventory
           </h2>
           <p className="text-sm text-on-surface-variant">
-            Register and manage ESP32/ESP8266 nodes with MAC address verification &amp; pairing code security.
+            Register and manage ESP IoT nodes. Devices authenticate using Pairing Codes with automatic hardware MAC binding.
           </p>
         </div>
         <button
@@ -178,6 +207,38 @@ export const DevicesPage: React.FC = () => {
           Register Device
         </button>
       </div>
+
+      {/* Global Success Banner */}
+      {successMessage && (
+        <div className="p-3 bg-[#ecfdf5] border border-[#10b981]/30 rounded-xl text-[#059669] text-sm flex items-center justify-between shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">check_circle</span>
+            <span className="font-semibold">{successMessage}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="text-[#059669] hover:opacity-75 cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      )}
+
+      {/* Global Error Banner */}
+      {errorMessage && (
+        <div className="p-3 bg-error-container/30 border border-error/20 rounded-xl text-error text-sm flex items-center justify-between shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">error</span>
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="text-error hover:opacity-75 cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      )}
 
       {allRooms.length === 0 && (
         <div className="p-4 bg-primary-container/10 border border-primary/20 rounded-xl text-primary text-sm flex items-center gap-2">
@@ -228,9 +289,9 @@ export const DevicesPage: React.FC = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant text-on-surface-variant font-label-caps text-label-caps uppercase">
               <tr>
-                <th className="px-lg py-md">Device Name</th>
-                <th className="px-lg py-md">UID / MAC Address</th>
-                <th className="px-lg py-md">Pairing Auth</th>
+                <th className="px-lg py-md">Device Name &amp; UID</th>
+                <th className="px-lg py-md">Pairing Code</th>
+                <th className="px-lg py-md">Hardware MAC Binding</th>
                 <th className="px-lg py-md">Type</th>
                 <th className="px-lg py-md">Room</th>
                 <th className="px-lg py-md">Presence</th>
@@ -253,35 +314,54 @@ export const DevicesPage: React.FC = () => {
               ) : (
                 filteredDevices.map((device: Device) => (
                   <tr key={device.id} className="hover:bg-surface-container-low/50">
-                    <td className="px-lg py-md font-semibold text-on-surface">
-                      {device.name}
+                    <td className="px-lg py-md">
+                      <div className="font-semibold text-on-surface">{device.name}</div>
+                      <div className="font-data-mono text-xs text-outline">{device.deviceUid}</div>
                     </td>
-                    <td className="px-lg py-md space-y-0.5">
-                      <div className="font-data-mono font-semibold text-on-surface text-xs">
-                        {device.deviceUid}
-                      </div>
-                      <div className="font-data-mono text-[11px] text-outline">
-                        {device.macAddress ? `MAC: ${device.macAddress}` : 'MAC: Any'}
-                      </div>
-                    </td>
+
+                    {/* Pairing Code */}
                     <td className="px-lg py-md">
                       {device.pairingCode ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-data-mono font-semibold bg-primary-container/20 text-primary border border-primary/20">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-data-mono font-bold bg-primary-container/20 text-primary border border-primary/20">
                           <span className="material-symbols-outlined text-[14px]">key</span>
                           {device.pairingCode}
                         </span>
                       ) : (
-                        <span className="text-outline text-xs italic">Unsecured</span>
+                        <span className="text-outline text-xs italic">None</span>
                       )}
                     </td>
+
+                    {/* Hardware MAC Binding Status */}
+                    <td className="px-lg py-md">
+                      {device.macAddress ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-data-mono font-semibold bg-[#ecfdf5] text-[#059669] border border-[#10b981]/20">
+                            <span className="material-symbols-outlined text-[14px]">verified</span>
+                            {device.macAddress}
+                          </span>
+                        </div>
+                      ) : device.pairingCode ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                          <span className="material-symbols-outlined text-[14px] animate-pulse">
+                            sensors
+                          </span>
+                          Waiting for ESP connection...
+                        </span>
+                      ) : (
+                        <span className="text-outline text-xs italic">Unpaired</span>
+                      )}
+                    </td>
+
                     <td className="px-lg py-md">
                       <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-container-highest text-on-surface-variant font-data-mono">
                         {device.deviceType}
                       </span>
                     </td>
+
                     <td className="px-lg py-md text-on-surface-variant">
                       {device.room?.name || `Room #${device.roomId}`}
                     </td>
+
                     <td className="px-lg py-md">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
@@ -300,6 +380,7 @@ export const DevicesPage: React.FC = () => {
                         {device.status}
                       </span>
                     </td>
+
                     <td className="px-lg py-md text-right space-x-1">
                       <button
                         onClick={() => setHistoryDeviceId(device.id)}
@@ -307,6 +388,20 @@ export const DevicesPage: React.FC = () => {
                       >
                         History
                       </button>
+
+                      {/* Reset Auth Button (Visible if MAC is bound) */}
+                      {device.macAddress && (
+                        <button
+                          onClick={() => setDeviceToResetAuth(device)}
+                          className="text-amber-600 hover:bg-amber-50 p-1 rounded transition-colors cursor-pointer"
+                          title="Reset Auth / Unbind MAC (Allow new ESP board to connect)"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">
+                            link_off
+                          </span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => openEditModal(device)}
                         className="text-on-surface-variant hover:text-primary hover:bg-surface-container-high p-1 rounded transition-colors cursor-pointer"
@@ -378,44 +473,54 @@ export const DevicesPage: React.FC = () => {
                 />
               </div>
 
-              {/* Hardware Security: MAC Address & Pairing Code */}
+              {/* Hardware Security: Pairing Code (Primary) */}
               <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/60 space-y-sm">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase">
-                  <span className="material-symbols-outlined text-[16px]">verified_user</span>
-                  <span>Hardware Authentication</span>
+                  <span className="material-symbols-outlined text-[16px]">lock</span>
+                  <span>ESP Authentication &amp; Pairing</span>
                 </div>
 
                 <div>
                   <label className="block text-[11px] font-semibold text-on-surface-variant uppercase mb-1">
-                    Device Hardware MAC Address (Optional)
+                    Pairing Code *
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. 24:6F:28:1A:3B:4C or AABBCCDDEEFF"
-                    value={macAddress}
-                    onChange={(e) => setMacAddress(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-xs font-data-mono"
-                  />
-                  <span className="text-[10px] text-outline">
-                    If set, backend will verify that incoming MQTT packets originate from this MAC address.
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-on-surface-variant uppercase mb-1">
-                    Pairing Code / Secret Key (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. TH-7788, SECRET-123"
+                    required
+                    placeholder="e.g. TH-7788, SENSOR-01"
                     value={pairingCode}
                     onChange={(e) => setPairingCode(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-xs font-data-mono"
+                    className="w-full px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-xs font-data-mono font-bold"
                   />
-                  <span className="text-[10px] text-outline">
-                    Hardcoded in ESP firmware to authenticate telemetry payloads.
+                  <span className="text-[10px] text-outline block mt-1 leading-relaxed">
+                    Hardcode this code into your ESP firmware (<code className="text-primary font-bold">#define PAIRING_CODE &quot;{pairingCode || 'YOUR_CODE'}&quot;</code>). On first connection, the backend will automatically bind the hardware MAC address of the ESP to this device.
                   </span>
                 </div>
+
+                {editingDevice && (
+                  <div>
+                    <label className="block text-[11px] font-semibold text-on-surface-variant uppercase mb-1">
+                      Bound MAC Address
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        disabled
+                        value={macAddress || 'Not yet bound (Waiting for ESP)'}
+                        className="w-full px-3 py-1.5 border border-outline-variant rounded-lg bg-surface-container-highest text-on-surface-variant text-xs font-data-mono disabled:opacity-75"
+                      />
+                      {macAddress && (
+                        <button
+                          type="button"
+                          onClick={() => setMacAddress('')}
+                          className="px-2.5 py-1.5 text-xs border border-error/40 text-error hover:bg-error-container/20 rounded-lg cursor-pointer whitespace-nowrap"
+                        >
+                          Clear MAC
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -522,6 +627,18 @@ export const DevicesPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Reset Auth Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deviceToResetAuth}
+        title="Reset Hardware Authentication"
+        message={`Are you sure you want to unbind MAC address "${deviceToResetAuth?.macAddress}" from device "${deviceToResetAuth?.name}"? Once reset, a new ESP board with pairing code "${deviceToResetAuth?.pairingCode}" can bind to this device.`}
+        confirmLabel="Yes, Reset Auth"
+        isDestructive={false}
+        isLoading={resetAuthMutation.isPending}
+        onConfirm={handleConfirmResetAuth}
+        onCancel={() => setDeviceToResetAuth(null)}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

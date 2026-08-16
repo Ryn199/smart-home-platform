@@ -97,6 +97,7 @@ model Device {
   @@index([roomId])
   @@index([deviceUid])
   @@index([macAddress])
+  @@index([pairingCode])
   @@index([lastSeenAt])
   @@map("devices")
 }

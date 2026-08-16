@@ -12,7 +12,7 @@ import { SmartCurtainStateDto } from '../smart-curtain/dto/smart-curtain-state.d
 import { ExhaustFanService } from '../exhaust-fan/exhaust-fan.service';
 import { ExhaustFanStateDto } from '../exhaust-fan/dto/exhaust-fan-state.dto';
 import { EventsGateway } from '../websocket/events.gateway';
-import { Device, DeviceType } from '@prisma/client';
+import { Device, DeviceType, Home, Room } from '@prisma/client';
 
 @Injectable()
 export class MqttRouterService implements OnModuleInit {
@@ -60,30 +60,80 @@ export class MqttRouterService implements OnModuleInit {
       return;
     }
 
-    // 2. Resolve device by deviceUid
-    let device: Device;
-    try {
-      device = await this.devicesService.findByDeviceUid(parsedTopic.deviceUid);
-    } catch {
+    // 2. Extract credentials & identifiers
+    const payloadPairingCode =
+      typeof payload.pairingCode === 'string'
+        ? payload.pairingCode.trim()
+        : typeof payload.code === 'string'
+          ? payload.code.trim()
+          : typeof payload.pairing === 'string'
+            ? payload.pairing.trim()
+            : '';
+
+    const payloadMac =
+      typeof payload.macAddress === 'string'
+        ? payload.macAddress.trim()
+        : typeof payload.mac === 'string'
+          ? payload.mac.trim()
+          : '';
+
+    const candidateUid =
+      (typeof payload.deviceUid === 'string' ? payload.deviceUid.trim() : '') ||
+      parsedTopic.deviceUid;
+
+    // 3. Resolve device (Priority 1: Pairing Code, Priority 2: Device UID)
+    let device: (Device & { room: Room & { home: Home } }) | null = null;
+
+    if (payloadPairingCode) {
+      device = await this.devicesService.findByPairingCode(payloadPairingCode);
+      if (!device) {
+        this.logger.warn(
+          `[SECURITY] Telemetry received with unregistered pairing code "${payloadPairingCode}" on topic "${rawTopic}". Ignored.`,
+        );
+        return;
+      }
+    } else if (candidateUid) {
+      try {
+        device = await this.devicesService.findByDeviceUid(candidateUid);
+      } catch {
+        this.logger.warn(
+          `Message received for unknown deviceUid "${candidateUid}" on "${rawTopic}". Ignored.`,
+        );
+        return;
+      }
+    } else {
       this.logger.warn(
-        `Message received for unknown deviceUid "${parsedTopic.deviceUid}" on "${rawTopic}". Ignored.`,
+        `Received unidentifiable MQTT message without pairingCode or deviceUid on topic "${rawTopic}". Ignored.`,
       );
       return;
     }
 
-    // 3. Security Verification: MAC Address & Pairing Code
-    if (device.macAddress) {
-      const payloadMac =
-        typeof payload.macAddress === 'string'
-          ? payload.macAddress
-          : typeof payload.mac === 'string'
-            ? payload.mac
-            : '';
+    // 4. Hardware Authentication & Auto-Binding
+    if (payloadPairingCode) {
+      if (!device.macAddress) {
+        // First connection with this pairingCode: Auto-bind the hardware MAC address!
+        if (payloadMac) {
+          device = await this.devicesService.bindMacAddress(device.id, payloadMac);
+          this.logger.log(
+            `[SECURITY] Device "${device.name}" (${device.deviceUid}) successfully bound to hardware MAC "${payloadMac}".`,
+          );
+        }
+      } else {
+        // Device is already bound to a hardware MAC address: Enforce strict MAC matching!
+        const expectedMac = this.normalizeMac(device.macAddress);
+        const actualMac = this.normalizeMac(payloadMac);
 
-      const expected = this.normalizeMac(device.macAddress);
-      const actual = this.normalizeMac(payloadMac);
-
-      if (expected && expected !== actual) {
+        if (!actualMac || expectedMac !== actualMac) {
+          this.logger.warn(
+            `[SECURITY] ACCESS DENIED for device "${device.name}" (${device.deviceUid}). Pairing code "${payloadPairingCode}" is already bound to MAC "${device.macAddress}", but received unauthorized packet from MAC "${payloadMac || 'UNKNOWN'}". Message rejected.`,
+          );
+          return;
+        }
+      }
+    } else if (device.macAddress && payloadMac) {
+      const expectedMac = this.normalizeMac(device.macAddress);
+      const actualMac = this.normalizeMac(payloadMac);
+      if (expectedMac !== actualMac) {
         this.logger.warn(
           `[SECURITY] MAC address mismatch for device "${device.deviceUid}". Expected "${device.macAddress}", received "${payloadMac}". Message rejected.`,
         );
@@ -91,27 +141,9 @@ export class MqttRouterService implements OnModuleInit {
       }
     }
 
-    if (device.pairingCode) {
-      const payloadCode =
-        typeof payload.pairingCode === 'string'
-          ? payload.pairingCode
-          : typeof payload.code === 'string'
-            ? payload.code
-            : typeof payload.pairing === 'string'
-              ? payload.pairing
-              : '';
-
-      if (device.pairingCode.trim() !== payloadCode.trim()) {
-        this.logger.warn(
-          `[SECURITY] Pairing code mismatch for device "${device.deviceUid}". Unauthorized payload rejected.`,
-        );
-        return;
-      }
-    }
-
     const now = new Date();
 
-    // 4. Update device lastSeenAt & broadcast device.status online
+    // 5. Update device lastSeenAt & broadcast device.status online
     try {
       await this.devicesService.updateLastSeen(device.deviceUid);
       this.eventsGateway.emitDeviceStatus({
@@ -124,12 +156,12 @@ export class MqttRouterService implements OnModuleInit {
       this.logger.error(`Failed to update lastSeenAt for ${device.deviceUid}: ${message}`);
     }
 
-    // 5. Delegate to specialized service based on DeviceType
+    // 6. Delegate to specialized domain service
     const messageType = parsedTopic.messageType;
 
     switch (device.deviceType) {
       case DeviceType.TEMP_HUMIDITY:
-        if (messageType === 'telemetry' || messageType === 'state') {
+        if (messageType === 'telemetry' || messageType === 'state' || !messageType) {
           await this.tempHumidityService.handleState(device, payload);
         }
         break;

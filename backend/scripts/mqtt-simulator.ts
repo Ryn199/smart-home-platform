@@ -61,10 +61,10 @@ client.on('connect', () => {
   setInterval(() => {
     const sensorDevice = devices.find((d) => d.type === 'TEMP_HUMIDITY');
     if (sensorDevice) {
-      const topic = `home/${sensorDevice.homeId}/${sensorDevice.roomId}/${sensorDevice.deviceUid}/telemetry`;
+      const topic = `iot/telemetry`;
       const payload = {
-        macAddress: sensorDevice.macAddress,
         pairingCode: sensorDevice.pairingCode,
+        macAddress: sensorDevice.macAddress,
         temperature: parseFloat((24 + Math.random() * 6).toFixed(1)),
         humidity: parseFloat((50 + Math.random() * 20).toFixed(1)),
       };

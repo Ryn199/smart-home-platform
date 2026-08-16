@@ -107,6 +107,18 @@ export class DevicesController {
     return this.devicesService.remove(id);
   }
 
+  @Post('devices/:id/reset-auth')
+  @ApiOperation({ summary: 'Reset device hardware MAC address binding so a new ESP hardware can pair' })
+  @ApiResponse({ status: 200, description: 'Device authentication reset successfully' })
+  @ApiResponse({ status: 404, description: 'Device not found' })
+  async resetAuth(@Param('id', ParseIntPipe) id: number): Promise<{ message: string; device: Device }> {
+    const device = await this.devicesService.resetAuth(id);
+    return {
+      message: `Authentication reset for device "${device.name}". MAC address binding removed.`,
+      device,
+    };
+  }
+
   @Get('rooms/:roomId/devices')
   @ApiOperation({ summary: 'List all devices in a room' })
   @ApiResponse({ status: 200, description: 'List of devices in room' })
