@@ -37,20 +37,18 @@ export class TempHumidityService {
     private readonly eventsGateway: EventsGateway,
   ) {}
 
-  async handleState(device: Device, payload: Record<string, unknown>): Promise<void> {
-    const temperature =
-      typeof payload.temperature === 'number'
-        ? payload.temperature
-        : typeof payload.temp === 'number'
-          ? payload.temp
-          : undefined;
+  private parseNumber(val: unknown): number | undefined {
+    if (typeof val === 'number' && !isNaN(val)) return val;
+    if (typeof val === 'string') {
+      const parsed = parseFloat(val.trim());
+      return isNaN(parsed) ? undefined : parsed;
+    }
+    return undefined;
+  }
 
-    const humidity =
-      typeof payload.humidity === 'number'
-        ? payload.humidity
-        : typeof payload.hum === 'number'
-          ? payload.hum
-          : undefined;
+  async handleState(device: Device, payload: Record<string, unknown>): Promise<void> {
+    const temperature = this.parseNumber(payload.temperature ?? payload.temp);
+    const humidity = this.parseNumber(payload.humidity ?? payload.hum);
 
     const currentMetadata = (device.metadata as Record<string, unknown>) || {};
     const now = new Date();

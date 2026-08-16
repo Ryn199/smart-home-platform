@@ -97,6 +97,18 @@ describe('TempHumidityService', () => {
     expect(automationService.evaluateSensorRules).toHaveBeenCalledWith(1, 'humidity', 65);
   });
 
+  it('should parse and save temperature and humidity even if provided as strings', async () => {
+    await service.handleState(mockDevice, { temperature: '24.0', humidity: '40.0' });
+
+    expect(prisma.tempHumidityReading.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        deviceId: 1,
+        temperature: 24.0,
+        humidity: 40.0,
+      }),
+    });
+  });
+
   it('should query historical readings from database with timeframe filter', async () => {
     const history = await service.getHistory('th-001', { timeframe: '1h', limit: 50 });
 

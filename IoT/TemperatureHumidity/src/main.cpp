@@ -131,8 +131,8 @@ void readAndPublishTelemetry() {
   StaticJsonDocument<256> doc;
   doc["pairingCode"] = PAIRING_CODE;
   doc["macAddress"]  = deviceMac;
-  doc["temperature"] = serialized(String(temperature, 1));
-  doc["humidity"]    = serialized(String(humidity, 1));
+  doc["temperature"] = round(temperature * 10.0) / 10.0;
+  doc["humidity"]    = round(humidity * 10.0) / 10.0;
 
   char jsonBuffer[256];
   serializeJson(doc, jsonBuffer);
