@@ -9,7 +9,7 @@ import { SmartDoorService } from '../smart-door/smart-door.service';
 import { SmartCurtainService } from '../smart-curtain/smart-curtain.service';
 import { ExhaustFanService } from '../exhaust-fan/exhaust-fan.service';
 import { NotFoundException } from '@nestjs/common';
-import { CommandStatus, DeviceType } from '@prisma/client';
+import { CommandStatus, DeviceStatus, DeviceType } from '@prisma/client';
 import { SmartDoorAction } from '../smart-door/dto/smart-door-command.dto';
 import { SmartCurtainAction } from '../smart-curtain/dto/smart-curtain-command.dto';
 import { ExhaustFanAction } from '../exhaust-fan/dto/exhaust-fan-command.dto';
@@ -48,6 +48,8 @@ describe('DevicesService', () => {
   };
   let exhaustFanService: {
     validateCommand: jest.Mock;
+    applyDesiredState: jest.Mock;
+    getState: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -85,7 +87,7 @@ describe('DevicesService', () => {
     };
     smartDoorService = { validateCommand: jest.fn() };
     smartCurtainService = { validateCommand: jest.fn() };
-    exhaustFanService = { validateCommand: jest.fn() };
+    exhaustFanService = { validateCommand: jest.fn(), applyDesiredState: jest.fn(), getState: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -170,7 +172,7 @@ describe('DevicesService', () => {
       expect(smartCurtainService.validateCommand).toHaveBeenCalledWith('set_position', 50);
     });
 
-    it('should validate and publish command for EXHAUST_FAN with speed', async () => {
+    it('should validate and publish command for EXHAUST_FAN with direction', async () => {
       const mockDevice = {
         id: 3,
         roomId: 1,
@@ -180,26 +182,31 @@ describe('DevicesService', () => {
       };
       prisma.device.findUnique.mockResolvedValue(mockDevice);
       exhaustFanService.validateCommand.mockReturnValue({
-        action: ExhaustFanAction.SET_SPEED,
-        speed: 2,
+        action: ExhaustFanAction.ON,
+        direction: 'EXHAUST',
       });
+      exhaustFanService.applyDesiredState.mockResolvedValue({
+        desiredPower: true,
+        desiredDirection: 'EXHAUST',
+      });
+      exhaustFanService.getState.mockResolvedValue(null);
 
       const mockCommand = {
         id: 12,
         deviceId: 3,
-        command: 'set_speed',
-        payload: { action: 'set_speed', speed: 2 },
+        command: 'on',
+        payload: { action: 'on', desiredPower: true, desiredDirection: 'EXHAUST', direction: 'EXHAUST' },
         status: CommandStatus.SENT,
       };
       prisma.deviceCommand.create.mockResolvedValue(mockCommand);
 
       const result = await service.executeCommand(3, {
-        action: 'set_speed',
-        speed: 2,
+        action: 'on',
+        direction: 'EXHAUST',
       });
 
       expect(result).toEqual(mockCommand);
-      expect(exhaustFanService.validateCommand).toHaveBeenCalledWith('set_speed', 2);
+      expect(exhaustFanService.validateCommand).toHaveBeenCalledWith('on', undefined);
     });
 
     it('should throw NotFoundException if device not found', async () => {
@@ -273,7 +280,11 @@ describe('DevicesService', () => {
       expect(prisma.device.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 1 },
-          data: { macAddress: null },
+          data: {
+            macAddress: null,
+            lastSeenAt: null,
+            status: DeviceStatus.UNKNOWN,
+          },
         }),
       );
     });

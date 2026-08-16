@@ -15,4 +15,9 @@ export class ExecuteCommandDto {
 
   @IsOptional()
   speed?: number;
+
+  /** For EXHAUST_FAN: 'INTAKE' | 'EXHAUST' */
+  @IsOptional()
+  @IsString()
+  direction?: string;
 }

@@ -116,7 +116,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
     s.on('device.state', (data: DeviceStateEvent) => {
       setDeviceStates((prev) => ({
         ...prev,
-        [data.deviceUid]: data.state,
+        // Merge incoming state with existing state so partial updates don't wipe previous fields
+        [data.deviceUid]: {
+          ...(prev[data.deviceUid] || {}),
+          ...data.state,
+        },
       }));
 
       setActivities((prev) => [
@@ -130,6 +134,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       ]);
 
       queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['device-by-uid', data.deviceUid] });
     });
 
     s.on('device.status', (data: DeviceStatusEvent) => {
@@ -154,7 +159,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       ]);
 
       queryClient.invalidateQueries({ queryKey: ['devices'] });
+      // Invalidate both possible command key formats used across pages
       queryClient.invalidateQueries({ queryKey: ['deviceCommands'] });
+      queryClient.invalidateQueries({ queryKey: ['device-commands'] });
     });
 
     setSocket(s);

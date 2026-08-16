@@ -30,6 +30,7 @@ export interface ExecuteCommandDto {
   action: string;
   position?: number;
   speed?: number;
+  direction?: string;
   payload?: Record<string, unknown>;
 }
 

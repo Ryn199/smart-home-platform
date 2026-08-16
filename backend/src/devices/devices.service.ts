@@ -272,6 +272,8 @@ export class DevicesService {
       where: { id },
       data: {
         macAddress: null,
+        lastSeenAt: null,
+        status: DeviceStatus.UNKNOWN,
       },
       include: {
         room: {
@@ -280,6 +282,12 @@ export class DevicesService {
           },
         },
       },
+    });
+
+    this.eventsGateway.emitDeviceStatus({
+      deviceUid: updated.deviceUid,
+      status: 'offline',
+      lastSeenAt: new Date(0),
     });
 
     return this.attachComputedStatus(updated);
@@ -397,9 +405,26 @@ export class DevicesService {
 
       case DeviceType.EXHAUST_FAN: {
         const validated = this.exhaustFanService.validateCommand(dto.action, dto.speed);
+
+        // Determine desired state from action
+        const desiredPower = validated.action !== 'off';
+        const desiredDirection = (
+          (dto.direction as string)?.toUpperCase() ||
+          (validated.direction as string)?.toUpperCase() ||
+          'EXHAUST'
+        ) as 'INTAKE' | 'EXHAUST';
+
+        // Persist desired state to DB metadata so ESP32 can reconcile after restart
+        await this.exhaustFanService.applyDesiredState(device.deviceUid, {
+          desiredPower,
+          desiredDirection,
+        });
+
         commandPayload = {
           action: validated.action,
-          ...(validated.speed !== undefined ? { speed: validated.speed } : {}),
+          desiredPower,
+          desiredDirection,
+          ...(validated.direction !== undefined ? { direction: validated.direction } : {}),
         };
         break;
       }

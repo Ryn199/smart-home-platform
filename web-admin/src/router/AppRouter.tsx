@@ -5,6 +5,7 @@ import { AppLayout } from '../components/layout/AppLayout';
 import { OverviewPage } from '../pages/OverviewPage';
 import { DeviceMonitoringPage } from '../pages/DeviceMonitoringPage';
 import { TempHumidityMonitoringPage } from '../pages/monitoring/TempHumidityMonitoringPage';
+import { ExhaustFanMonitoringPage } from '../pages/monitoring/ExhaustFanMonitoringPage';
 import { HomesPage } from '../pages/HomesPage';
 import { RoomsPage } from '../pages/RoomsPage';
 import { DevicesPage } from '../pages/DevicesPage';
@@ -62,6 +63,7 @@ export const AppRouter: React.FC = () => {
           <Route index element={<OverviewPage />} />
           <Route path="monitoring" element={<DeviceMonitoringPage />} />
           <Route path="monitoring/temp-humidity/:deviceUid" element={<TempHumidityMonitoringPage />} />
+          <Route path="monitoring/exhaust-fan/:deviceUid" element={<ExhaustFanMonitoringPage />} />
           <Route path="monitoring/:deviceUid" element={<DeviceMonitoringRedirect />} />
 
           {/* Manajemen Group */}

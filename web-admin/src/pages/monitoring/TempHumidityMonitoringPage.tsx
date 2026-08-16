@@ -51,7 +51,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
   const [appliedCustomRange, setAppliedCustomRange] = useState<{ start?: string; end?: string }>({});
 
   // Pagination and page size state for telemetry table
-  const [pageSize, setPageSize] = useState<number>(10);
+  const [pageSize, setPageSize] = useState<number>(5);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryPoint[]>([]);
@@ -579,12 +579,12 @@ export const TempHumidityMonitoringPage: React.FC = () => {
         <div className="bg-surface border border-outline-variant rounded-xl p-lg flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between text-on-surface-variant">
             <div className="flex items-center gap-2">
-              <span
+              {/* <span
                 className={`inline-flex rounded-full h-2.5 w-2.5 ${
                   currentTemp !== null && currentHum !== null ? 'bg-[#10b981]' : 'bg-error'
                 }`}
                 title={currentTemp !== null && currentHum !== null ? 'Kalkulasi Aktif' : 'Tidak Ada Data'}
-              />
+              /> */}
               <span className="font-label-caps text-label-caps uppercase">Est. Dew Point</span>
             </div>
             <span className="material-symbols-outlined text-primary text-[20px]">water_drop</span>
@@ -610,12 +610,12 @@ export const TempHumidityMonitoringPage: React.FC = () => {
         <div className="bg-surface border border-outline-variant rounded-xl p-lg flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between text-on-surface-variant">
             <div className="flex items-center gap-2">
-              <span
+              {/* <span
                 className={`inline-flex rounded-full h-2.5 w-2.5 ${
                   stats.totalCount > 0 ? 'bg-[#10b981]' : 'bg-error'
                 }`}
                 title={stats.totalCount > 0 ? 'Tersimpan di Database' : 'Belum Ada Transmisi'}
-              />
+              /> */}
               <span className="font-label-caps text-label-caps uppercase">Telemetry Storage</span>
             </div>
             <span className="material-symbols-outlined text-primary text-[20px]">database</span>
@@ -769,6 +769,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
               }}
               className="px-2.5 py-1 border border-outline-variant rounded-lg bg-surface text-on-surface font-semibold focus:outline-none focus:border-primary cursor-pointer"
             >
+              <option value={5}>5 data</option>
               <option value={10}>10 data</option>
               <option value={15}>15 data</option>
               <option value={20}>20 data</option>

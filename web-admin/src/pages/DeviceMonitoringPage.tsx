@@ -52,6 +52,8 @@ export const DeviceMonitoringPage: React.FC = () => {
   const handleDeviceClick = (device: Device) => {
     if (device.deviceType === 'TEMP_HUMIDITY') {
       navigate(`/monitoring/temp-humidity/${device.deviceUid}`);
+    } else if (device.deviceType === 'EXHAUST_FAN') {
+      navigate(`/monitoring/exhaust-fan/${device.deviceUid}`);
     } else {
       // Direct to specific monitoring or fallback
       navigate(`/monitoring/${device.deviceUid}`);
@@ -133,14 +135,33 @@ export const DeviceMonitoringPage: React.FC = () => {
 
       case 'EXHAUST_FAN': {
         const state = rawState as unknown as ExhaustFanState;
+        const isRunning = state.operationState === 'RUNNING';
+        const hasError = !!state.errorCode && state.errorCode !== 'NONE';
+        const desiredPower = state.desiredPower ?? false;
+        const actualDir = state.direction ?? state.desiredDirection ?? '—';
         return (
-          <div className="mt-3 bg-surface-container-low p-2.5 rounded-lg border border-outline-variant/50 flex justify-between items-center text-xs">
-            <span className="text-on-surface-variant font-medium">
-              Power: <strong className={state.power ? 'text-primary font-bold' : 'text-outline'}>{state.power ? 'ON' : 'OFF'}</strong>
-            </span>
-            <span className="text-on-surface-variant font-medium">
-              Speed: <strong className="text-on-surface">{state.speed || 0}</strong>
-            </span>
+          <div className="mt-3 bg-surface-container-low p-2.5 rounded-lg border border-outline-variant/50 space-y-1.5">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-on-surface-variant font-medium">
+                Power:
+                <strong className={desiredPower ? 'text-primary ml-1' : 'text-outline ml-1'}>
+                  {desiredPower ? 'ON' : 'OFF'}
+                </strong>
+              </span>
+              <span className="text-on-surface-variant font-medium">
+                Dir: <strong className="text-on-surface">{actualDir}</strong>
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className={`font-semibold ${
+                hasError ? 'text-error' : isRunning ? 'text-primary' : 'text-outline'
+              }`}>
+                {hasError ? `⚠ ${state.errorCode}` : (state.operationState ?? 'IDLE').replace(/_/g, ' ')}
+              </span>
+              <span className="text-on-surface-variant">
+                Duct: <strong className="text-on-surface">{state.ductPosition ?? 'UNKNOWN'}</strong>
+              </span>
+            </div>
           </div>
         );
       }

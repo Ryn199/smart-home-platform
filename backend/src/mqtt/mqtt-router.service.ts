@@ -43,6 +43,11 @@ export class MqttRouterService implements OnModuleInit {
     rawTopic: string,
     payloadBuffer: Buffer,
   ): Promise<void> {
+    // 0. Ignore outgoing command topics (commands are sent to devices, not from devices)
+    if (parsedTopic.messageType === 'command') {
+      return;
+    }
+
     // 1. Parse JSON safely
     let payload: Record<string, unknown>;
     try {
@@ -130,6 +135,13 @@ export class MqttRouterService implements OnModuleInit {
           return;
         }
       }
+    } else if (device.pairingCode && !device.macAddress) {
+      // Device has a pairing code configured in DB but has not yet bound a MAC address.
+      // Unbound devices MUST provide the pairing code on first connection.
+      this.logger.warn(
+        `[SECURITY] Device "${device.deviceUid}" is not yet bound to a MAC address and requires pairing code for authentication. Packet rejected.`,
+      );
+      return;
     } else if (device.macAddress && payloadMac) {
       const expectedMac = this.normalizeMac(device.macAddress);
       const actualMac = this.normalizeMac(payloadMac);
@@ -255,27 +267,21 @@ export class MqttRouterService implements OnModuleInit {
     payload: Record<string, unknown>,
     rawTopic: string,
   ): Promise<void> {
-    const stateDto = plainToInstance(ExhaustFanStateDto, payload);
-    const errors = await validate(stateDto);
+    // Delegate to ExhaustFanService.handleState which safely merges partial updates
+    await this.exhaustFanService.handleState(device.deviceUid, payload);
 
-    if (errors.length > 0) {
-      this.logger.warn(
-        `Invalid Exhaust Fan state payload on topic "${rawTopic}": ${JSON.stringify(errors.map((e) => e.constraints))}`,
-      );
-      return;
-    }
-
-    await this.exhaustFanService.updateState(device.deviceUid, stateDto);
-
-    // Broadcast real-time device.state event
+    // Broadcast real-time device.state event with the full raw payload so UI can react immediately
     this.eventsGateway.emitDeviceState({
       deviceUid: device.deviceUid,
       deviceType: 'EXHAUST_FAN',
-      state: stateDto as unknown as Record<string, unknown>,
+      state: payload,
     });
 
     this.logger.log(
-      `Exhaust Fan [${device.deviceUid}] state updated: power=${stateDto.power}, speed=${stateDto.speed}`,
+      `[EXHAUST] State received & stored for ${device.deviceUid} from topic "${rawTopic}": ` +
+        `power=${payload.power}, direction=${payload.direction}, duct=${payload.ductPosition ?? payload.duct_position}, ` +
+        `state=${payload.operationState ?? payload.operation_state}`,
     );
   }
 }
+

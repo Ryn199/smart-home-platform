@@ -1,21 +1,36 @@
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
+
+export enum FanPower {
+  ON = 'ON',
+  OFF = 'OFF',
+}
+
+export enum FanDirection {
+  INTAKE = 'INTAKE',
+  EXHAUST = 'EXHAUST',
+}
 
 export enum ExhaustFanAction {
   ON = 'on',
   OFF = 'off',
-  SET_SPEED = 'set_speed',
+  SET_DIRECTION = 'set_direction',
+  INTAKE = 'intake',
+  EXHAUST = 'exhaust',
 }
 
 export class ExhaustFanCommandDto {
   @IsEnum(ExhaustFanAction, {
-    message: 'action must be one of: on, off, set_speed',
+    message: 'action must be one of: on, off, set_direction, intake, exhaust',
   })
-  @IsNotEmpty()
   action!: ExhaustFanAction;
 
   @IsOptional()
-  @IsInt({ message: 'speed must be an integer between 0 and 3' })
-  @Min(0)
-  @Max(3)
-  speed?: number;
+  @IsEnum(FanDirection, {
+    message: 'direction must be INTAKE or EXHAUST',
+  })
+  direction?: FanDirection;
+
+  @IsOptional()
+  @IsString()
+  speed?: string;
 }

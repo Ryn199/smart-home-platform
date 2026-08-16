@@ -30,3 +30,8 @@ logs/
 postgres_data/
 mosquitto_data/
 mosquitto_log/
+
+# PlatformIO & Embedded
+.pio/
+compile_commands.json
+

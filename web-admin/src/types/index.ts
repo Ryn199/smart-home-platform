@@ -132,7 +132,46 @@ export interface SmartCurtainState {
   state: 'opening' | 'closing' | 'stopped';
 }
 
+export type DuctPosition = 'OPEN' | 'CLOSED' | 'OPENING' | 'CLOSING' | 'UNKNOWN' | 'ERROR';
+
+export type FanOperationState =
+  | 'BOOTING'
+  | 'IDLE'
+  | 'OPENING_DUCT'
+  | 'CLOSING_DUCT'
+  | 'STOPPING_FAN'
+  | 'WAITING_MOTOR_STOP'
+  | 'CHANGING_DIRECTION'
+  | 'WAITING_RELAY_SETTLE'
+  | 'STARTING_FAN'
+  | 'RUNNING'
+  | 'ERROR';
+
+export type FanErrorCode =
+  | 'NONE'
+  | 'DUCT_OPEN_TIMEOUT'
+  | 'DUCT_CLOSE_TIMEOUT'
+  | 'DUCT_POSITION_INVALID'
+  | 'SERVO_ERROR'
+  | 'MOTOR_STOP_TIMEOUT'
+  | 'DIRECTION_CHANGE_ERROR'
+  | 'MQTT_ERROR'
+  | 'BACKEND_STATE_SYNC_ERROR';
+
 export interface ExhaustFanState {
-  power: boolean;
-  speed: number; // 0, 1, 2, 3
+  /** Desired state: what was last commanded */
+  desiredPower?: boolean;
+  desiredDirection?: 'INTAKE' | 'EXHAUST';
+
+  /** Actual hardware state reported by ESP32 */
+  power?: boolean;
+  direction?: 'INTAKE' | 'EXHAUST';
+  ductPosition?: DuctPosition;
+  operationState?: FanOperationState;
+  errorCode?: FanErrorCode;
+
+  /** Legacy speed field */
+  speed?: number;
+
+  lastUpdated?: string;
 }
