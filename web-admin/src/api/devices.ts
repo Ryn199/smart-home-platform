@@ -11,6 +11,8 @@ export interface CreateDeviceDto {
   roomId: number;
   name: string;
   deviceUid: string;
+  macAddress?: string;
+  pairingCode?: string;
   deviceType?: DeviceType;
   metadata?: Record<string, unknown>;
 }
@@ -18,6 +20,8 @@ export interface CreateDeviceDto {
 export interface UpdateDeviceDto {
   name?: string;
   roomId?: number;
+  macAddress?: string;
+  pairingCode?: string;
   deviceType?: DeviceType;
   metadata?: Record<string, unknown>;
 }

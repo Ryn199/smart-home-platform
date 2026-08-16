@@ -92,12 +92,90 @@ describe('MqttRouterService', () => {
     expect(tempHumidityService.handleState).not.toHaveBeenCalled();
   });
 
-  it('should route TEMP_HUMIDITY telemetry to TempHumidityService', async () => {
+  it('should reject telemetry if MAC address does not match', async () => {
+    const mockDevice: Device = {
+      id: 1,
+      roomId: 1,
+      name: 'Temp Sensor',
+      deviceUid: 'th-001',
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      pairingCode: 'SECRET-123',
+      deviceType: DeviceType.TEMP_HUMIDITY,
+      status: DeviceStatus.ONLINE,
+      lastSeenAt: new Date(),
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    devicesService.findByDeviceUid.mockResolvedValue(mockDevice);
+
+    const parsedTopic = {
+      homeId: '1',
+      roomId: '1',
+      deviceUid: 'th-001',
+      messageType: 'telemetry',
+    };
+    const payload = Buffer.from(
+      JSON.stringify({
+        macAddress: '11:22:33:44:55:66',
+        pairingCode: 'SECRET-123',
+        temperature: 28.4,
+        humidity: 72.1,
+      }),
+    );
+
+    await service.routeMessage(parsedTopic, 'home/1/1/th-001/telemetry', payload);
+
+    expect(tempHumidityService.handleState).not.toHaveBeenCalled();
+    expect(devicesService.updateLastSeen).not.toHaveBeenCalled();
+  });
+
+  it('should reject telemetry if pairing code does not match', async () => {
+    const mockDevice: Device = {
+      id: 1,
+      roomId: 1,
+      name: 'Temp Sensor',
+      deviceUid: 'th-001',
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      pairingCode: 'SECRET-123',
+      deviceType: DeviceType.TEMP_HUMIDITY,
+      status: DeviceStatus.ONLINE,
+      lastSeenAt: new Date(),
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    devicesService.findByDeviceUid.mockResolvedValue(mockDevice);
+
+    const parsedTopic = {
+      homeId: '1',
+      roomId: '1',
+      deviceUid: 'th-001',
+      messageType: 'telemetry',
+    };
+    const payload = Buffer.from(
+      JSON.stringify({
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        pairingCode: 'WRONG-CODE',
+        temperature: 28.4,
+        humidity: 72.1,
+      }),
+    );
+
+    await service.routeMessage(parsedTopic, 'home/1/1/th-001/telemetry', payload);
+
+    expect(tempHumidityService.handleState).not.toHaveBeenCalled();
+    expect(devicesService.updateLastSeen).not.toHaveBeenCalled();
+  });
+
+  it('should accept and route TEMP_HUMIDITY telemetry when credentials match', async () => {
     const mockDevice: Device = {
       id: 1,
       roomId: 1,
       name: 'Temp Sensor',
       deviceUid: 'sensor-001',
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      pairingCode: 'PAIR-123',
       deviceType: DeviceType.TEMP_HUMIDITY,
       status: DeviceStatus.ONLINE,
       lastSeenAt: new Date(),
@@ -113,7 +191,12 @@ describe('MqttRouterService', () => {
       deviceUid: 'sensor-001',
       messageType: 'telemetry',
     };
-    const data = { temperature: 28.4, humidity: 72.1 };
+    const data = {
+      macAddress: 'aabbccddeeff',
+      pairingCode: 'PAIR-123',
+      temperature: 28.4,
+      humidity: 72.1,
+    };
     const payload = Buffer.from(JSON.stringify(data));
 
     await service.routeMessage(parsedTopic, 'home/1/1/sensor-001/telemetry', payload);
@@ -128,6 +211,8 @@ describe('MqttRouterService', () => {
       roomId: 1,
       name: 'Door',
       deviceUid: 'door-001',
+      macAddress: null,
+      pairingCode: null,
       deviceType: DeviceType.SMART_DOOR,
       status: DeviceStatus.ONLINE,
       lastSeenAt: new Date(),
@@ -160,6 +245,8 @@ describe('MqttRouterService', () => {
       roomId: 1,
       name: 'Curtain',
       deviceUid: 'curtain-001',
+      macAddress: null,
+      pairingCode: null,
       deviceType: DeviceType.SMART_CURTAIN,
       status: DeviceStatus.ONLINE,
       lastSeenAt: new Date(),
@@ -192,6 +279,8 @@ describe('MqttRouterService', () => {
       roomId: 1,
       name: 'Fan',
       deviceUid: 'fan-001',
+      macAddress: null,
+      pairingCode: null,
       deviceType: DeviceType.EXHAUST_FAN,
       status: DeviceStatus.ONLINE,
       lastSeenAt: new Date(),

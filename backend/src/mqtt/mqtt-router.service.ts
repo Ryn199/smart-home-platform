@@ -33,6 +33,11 @@ export class MqttRouterService implements OnModuleInit {
     this.logger.log('MQTT message router registered.');
   }
 
+  private normalizeMac(mac?: string | null): string {
+    if (!mac) return '';
+    return mac.replace(/[:-]/g, '').toUpperCase().trim();
+  }
+
   async routeMessage(
     parsedTopic: ParsedMqttTopic,
     rawTopic: string,
@@ -66,9 +71,47 @@ export class MqttRouterService implements OnModuleInit {
       return;
     }
 
+    // 3. Security Verification: MAC Address & Pairing Code
+    if (device.macAddress) {
+      const payloadMac =
+        typeof payload.macAddress === 'string'
+          ? payload.macAddress
+          : typeof payload.mac === 'string'
+            ? payload.mac
+            : '';
+
+      const expected = this.normalizeMac(device.macAddress);
+      const actual = this.normalizeMac(payloadMac);
+
+      if (expected && expected !== actual) {
+        this.logger.warn(
+          `[SECURITY] MAC address mismatch for device "${device.deviceUid}". Expected "${device.macAddress}", received "${payloadMac}". Message rejected.`,
+        );
+        return;
+      }
+    }
+
+    if (device.pairingCode) {
+      const payloadCode =
+        typeof payload.pairingCode === 'string'
+          ? payload.pairingCode
+          : typeof payload.code === 'string'
+            ? payload.code
+            : typeof payload.pairing === 'string'
+              ? payload.pairing
+              : '';
+
+      if (device.pairingCode.trim() !== payloadCode.trim()) {
+        this.logger.warn(
+          `[SECURITY] Pairing code mismatch for device "${device.deviceUid}". Unauthorized payload rejected.`,
+        );
+        return;
+      }
+    }
+
     const now = new Date();
 
-    // 3. Update device lastSeenAt & broadcast device.status online
+    // 4. Update device lastSeenAt & broadcast device.status online
     try {
       await this.devicesService.updateLastSeen(device.deviceUid);
       this.eventsGateway.emitDeviceStatus({
@@ -81,7 +124,7 @@ export class MqttRouterService implements OnModuleInit {
       this.logger.error(`Failed to update lastSeenAt for ${device.deviceUid}: ${message}`);
     }
 
-    // 4. Delegate to specialized service based on DeviceType
+    // 5. Delegate to specialized service based on DeviceType
     const messageType = parsedTopic.messageType;
 
     switch (device.deviceType) {

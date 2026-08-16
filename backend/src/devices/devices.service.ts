@@ -94,6 +94,8 @@ export class DevicesService {
         roomId: dto.roomId,
         name: dto.name,
         deviceUid: dto.deviceUid,
+        macAddress: dto.macAddress ? dto.macAddress.trim() : null,
+        pairingCode: dto.pairingCode ? dto.pairingCode.trim() : null,
         deviceType: dto.deviceType ?? DeviceType.TEMP_HUMIDITY,
         status: DeviceStatus.UNKNOWN,
         metadata: dto.metadata ? (dto.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
@@ -236,6 +238,8 @@ export class DevicesService {
     const data: Prisma.DeviceUpdateInput = {};
 
     if (dto.name !== undefined) data.name = dto.name;
+    if (dto.macAddress !== undefined) data.macAddress = dto.macAddress ? dto.macAddress.trim() : null;
+    if (dto.pairingCode !== undefined) data.pairingCode = dto.pairingCode ? dto.pairingCode.trim() : null;
     if (dto.deviceType !== undefined) data.deviceType = dto.deviceType;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.roomId !== undefined) data.room = { connect: { id: dto.roomId } };

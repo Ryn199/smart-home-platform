@@ -18,6 +18,8 @@ export const DevicesPage: React.FC = () => {
   // Form states
   const [name, setName] = useState('');
   const [deviceUid, setDeviceUid] = useState('');
+  const [macAddress, setMacAddress] = useState('');
+  const [pairingCode, setPairingCode] = useState('');
   const [deviceType, setDeviceType] = useState<DeviceType>('TEMP_HUMIDITY');
   const [roomId, setRoomId] = useState<number>(1);
 
@@ -54,8 +56,13 @@ export const DevicesPage: React.FC = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { name?: string; roomId?: number } }) =>
-      devicesApi.update(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: { name?: string; roomId?: number; macAddress?: string; pairingCode?: string };
+    }) => devicesApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       closeModal();
@@ -81,6 +88,8 @@ export const DevicesPage: React.FC = () => {
     setEditingDevice(null);
     setName('');
     setDeviceUid('');
+    setMacAddress('');
+    setPairingCode('');
     setDeviceType('TEMP_HUMIDITY');
     if (allRooms.length > 0) setRoomId(allRooms[0].id);
     setErrorMessage(null);
@@ -91,6 +100,8 @@ export const DevicesPage: React.FC = () => {
     setEditingDevice(device);
     setName(device.name);
     setDeviceUid(device.deviceUid);
+    setMacAddress(device.macAddress || '');
+    setPairingCode(device.pairingCode || '');
     setDeviceType(device.deviceType);
     setRoomId(device.roomId);
     setErrorMessage(null);
@@ -102,6 +113,8 @@ export const DevicesPage: React.FC = () => {
     setEditingDevice(null);
     setName('');
     setDeviceUid('');
+    setMacAddress('');
+    setPairingCode('');
     setErrorMessage(null);
   };
 
@@ -118,13 +131,20 @@ export const DevicesPage: React.FC = () => {
     if (editingDevice) {
       updateMutation.mutate({
         id: editingDevice.id,
-        data: { name: name.trim(), roomId },
+        data: {
+          name: name.trim(),
+          roomId,
+          macAddress: macAddress.trim() || undefined,
+          pairingCode: pairingCode.trim() || undefined,
+        },
       });
     } else {
       if (!deviceUid.trim()) return;
       registerMutation.mutate({
         name: name.trim(),
         deviceUid: deviceUid.trim(),
+        macAddress: macAddress.trim() || undefined,
+        pairingCode: pairingCode.trim() || undefined,
         deviceType,
         roomId,
       });
@@ -146,7 +166,7 @@ export const DevicesPage: React.FC = () => {
             Devices Inventory
           </h2>
           <p className="text-sm text-on-surface-variant">
-            Register and manage ESP32 nodes and smart appliances across 4 specialized domains.
+            Register and manage ESP32/ESP8266 nodes with MAC address verification &amp; pairing code security.
           </p>
         </div>
         <button
@@ -162,7 +182,7 @@ export const DevicesPage: React.FC = () => {
       {allRooms.length === 0 && (
         <div className="p-4 bg-primary-container/10 border border-primary/20 rounded-xl text-primary text-sm flex items-center gap-2">
           <span className="material-symbols-outlined">info</span>
-          <span>Please create at least one Home & Room before registering devices.</span>
+          <span>Please create at least one Home &amp; Room before registering devices.</span>
         </div>
       )}
 
@@ -178,7 +198,7 @@ export const DevicesPage: React.FC = () => {
             className="px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-sm focus:outline-none"
           >
             <option value="ALL">All Device Types</option>
-            <option value="TEMP_HUMIDITY">Temperature & Humidity Node</option>
+            <option value="TEMP_HUMIDITY">Temperature &amp; Humidity Node</option>
             <option value="SMART_DOOR">Smart Door</option>
             <option value="SMART_CURTAIN">Smart Curtain</option>
             <option value="EXHAUST_FAN">Smart Exhaust Fan</option>
@@ -209,7 +229,8 @@ export const DevicesPage: React.FC = () => {
             <thead className="bg-surface-container-low border-b border-outline-variant text-on-surface-variant font-label-caps text-label-caps uppercase">
               <tr>
                 <th className="px-lg py-md">Device Name</th>
-                <th className="px-lg py-md">UID</th>
+                <th className="px-lg py-md">UID / MAC Address</th>
+                <th className="px-lg py-md">Pairing Auth</th>
                 <th className="px-lg py-md">Type</th>
                 <th className="px-lg py-md">Room</th>
                 <th className="px-lg py-md">Presence</th>
@@ -219,13 +240,13 @@ export const DevicesPage: React.FC = () => {
             <tbody className="divide-y divide-outline-variant/60">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-lg py-xl text-center text-outline">
+                  <td colSpan={7} className="px-lg py-xl text-center text-outline">
                     Loading devices...
                   </td>
                 </tr>
               ) : filteredDevices.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-lg py-xl text-center text-outline">
+                  <td colSpan={7} className="px-lg py-xl text-center text-outline">
                     No devices match the selected filters.
                   </td>
                 </tr>
@@ -235,8 +256,23 @@ export const DevicesPage: React.FC = () => {
                     <td className="px-lg py-md font-semibold text-on-surface">
                       {device.name}
                     </td>
-                    <td className="px-lg py-md font-data-mono text-outline">
-                      {device.deviceUid}
+                    <td className="px-lg py-md space-y-0.5">
+                      <div className="font-data-mono font-semibold text-on-surface text-xs">
+                        {device.deviceUid}
+                      </div>
+                      <div className="font-data-mono text-[11px] text-outline">
+                        {device.macAddress ? `MAC: ${device.macAddress}` : 'MAC: Any'}
+                      </div>
+                    </td>
+                    <td className="px-lg py-md">
+                      {device.pairingCode ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-data-mono font-semibold bg-primary-container/20 text-primary border border-primary/20">
+                          <span className="material-symbols-outlined text-[14px]">key</span>
+                          {device.pairingCode}
+                        </span>
+                      ) : (
+                        <span className="text-outline text-xs italic">Unsecured</span>
+                      )}
                     </td>
                     <td className="px-lg py-md">
                       <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-container-highest text-on-surface-variant font-data-mono">
@@ -301,7 +337,7 @@ export const DevicesPage: React.FC = () => {
       {/* Register / Edit Device Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface border border-outline-variant rounded-xl p-lg max-w-md w-full shadow-lg space-y-md animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-surface border border-outline-variant rounded-xl p-lg max-w-md w-full shadow-lg space-y-md animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             <h3 className="font-headline-md text-headline-md text-on-surface font-semibold">
               {editingDevice ? 'Edit Device' : 'Register New Device'}
             </h3>
@@ -342,6 +378,46 @@ export const DevicesPage: React.FC = () => {
                 />
               </div>
 
+              {/* Hardware Security: MAC Address & Pairing Code */}
+              <div className="p-md bg-surface-container-low rounded-xl border border-outline-variant/60 space-y-sm">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase">
+                  <span className="material-symbols-outlined text-[16px]">verified_user</span>
+                  <span>Hardware Authentication</span>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-on-surface-variant uppercase mb-1">
+                    Device Hardware MAC Address (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 24:6F:28:1A:3B:4C or AABBCCDDEEFF"
+                    value={macAddress}
+                    onChange={(e) => setMacAddress(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-xs font-data-mono"
+                  />
+                  <span className="text-[10px] text-outline">
+                    If set, backend will verify that incoming MQTT packets originate from this MAC address.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-on-surface-variant uppercase mb-1">
+                    Pairing Code / Secret Key (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. TH-7788, SECRET-123"
+                    value={pairingCode}
+                    onChange={(e) => setPairingCode(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-xs font-data-mono"
+                  />
+                  <span className="text-[10px] text-outline">
+                    Hardcoded in ESP firmware to authenticate telemetry payloads.
+                  </span>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant uppercase mb-1">
                   Device Type
@@ -352,10 +428,10 @@ export const DevicesPage: React.FC = () => {
                   onChange={(e) => setDeviceType(e.target.value as DeviceType)}
                   className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm disabled:opacity-50 disabled:bg-surface-container-low"
                 >
-                  <option value="TEMP_HUMIDITY">TEMP_HUMIDITY (Temperature & Humidity)</option>
+                  <option value="TEMP_HUMIDITY">TEMP_HUMIDITY (Temperature &amp; Humidity)</option>
                   <option value="SMART_DOOR">SMART_DOOR (Lock/Unlock)</option>
                   <option value="SMART_CURTAIN">SMART_CURTAIN (Motor Position)</option>
-                  <option value="EXHAUST_FAN">EXHAUST_FAN (Speed & Power)</option>
+                  <option value="EXHAUST_FAN">EXHAUST_FAN (Speed &amp; Power)</option>
                 </select>
               </div>
 

@@ -5,13 +5,15 @@ console.log(`[Simulator] Connecting to MQTT broker at ${brokerUrl}...`);
 
 const client = mqtt.connect(brokerUrl);
 
-// Simulated Devices Configuration for the 4 Dedicated Types
+// Simulated Devices Configuration with hardware MAC & Pairing Code
 const devices = [
   {
     type: 'TEMP_HUMIDITY',
     homeId: '1',
     roomId: '1',
     deviceUid: 'th-sim-001',
+    macAddress: '24:6F:28:1A:3B:4C',
+    pairingCode: 'TH-7788',
     telemetryIntervalMs: 5000,
   },
   {
@@ -19,6 +21,8 @@ const devices = [
     homeId: '1',
     roomId: '1',
     deviceUid: 'door-sim-001',
+    macAddress: '24:6F:28:2B:4C:5D',
+    pairingCode: 'DOOR-1234',
     state: { door: 'closed', lock: 'locked' },
   },
   {
@@ -26,6 +30,8 @@ const devices = [
     homeId: '1',
     roomId: '1',
     deviceUid: 'curtain-sim-001',
+    macAddress: '24:6F:28:3C:5D:6E',
+    pairingCode: 'CURT-5678',
     state: { position: 100, state: 'stopped' },
   },
   {
@@ -33,6 +39,8 @@ const devices = [
     homeId: '1',
     roomId: '2',
     deviceUid: 'fan-sim-001',
+    macAddress: '24:6F:28:4D:6E:7F',
+    pairingCode: 'FAN-9900',
     state: { power: false, speed: 0 },
   },
 ];
@@ -55,6 +63,8 @@ client.on('connect', () => {
     if (sensorDevice) {
       const topic = `home/${sensorDevice.homeId}/${sensorDevice.roomId}/${sensorDevice.deviceUid}/telemetry`;
       const payload = {
+        macAddress: sensorDevice.macAddress,
+        pairingCode: sensorDevice.pairingCode,
         temperature: parseFloat((24 + Math.random() * 6).toFixed(1)),
         humidity: parseFloat((50 + Math.random() * 20).toFixed(1)),
       };

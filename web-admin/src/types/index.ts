@@ -50,6 +50,8 @@ export interface Device {
   roomId: number;
   name: string;
   deviceUid: string;
+  macAddress?: string | null;
+  pairingCode?: string | null;
   deviceType: DeviceType;
   status: DeviceStatus;
   lastSeenAt: string | null;

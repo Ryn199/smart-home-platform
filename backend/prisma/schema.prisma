@@ -77,16 +77,18 @@ enum DeviceStatus {
 }
 
 model Device {
-  id         Int          @id @default(autoincrement())
-  roomId     Int
-  name       String
-  deviceUid  String       @unique
-  deviceType DeviceType   @default(TEMP_HUMIDITY)
-  status     DeviceStatus @default(UNKNOWN)
-  lastSeenAt DateTime?
-  metadata   Json?        // Holds live domain state (e.g. { temperature: 28.5, humidity: 65 })
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id          Int          @id @default(autoincrement())
+  roomId      Int
+  name        String
+  deviceUid   String       @unique
+  macAddress  String?      // Hardware MAC address for identity matching
+  pairingCode String?      // Secret pairing token/code for payload authentication
+  deviceType  DeviceType   @default(TEMP_HUMIDITY)
+  status      DeviceStatus @default(UNKNOWN)
+  lastSeenAt  DateTime?
+  metadata    Json?        // Holds live domain state (e.g. { temperature: 28.5, humidity: 65 })
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   room                 Room                  @relation(fields: [roomId], references: [id], onDelete: Cascade)
   commands             DeviceCommand[]
@@ -94,6 +96,7 @@ model Device {
 
   @@index([roomId])
   @@index([deviceUid])
+  @@index([macAddress])
   @@index([lastSeenAt])
   @@map("devices")
 }

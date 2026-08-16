@@ -11,6 +11,16 @@ export class UpdateDeviceDto {
   @MaxLength(100)
   name?: string;
 
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  macAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  pairingCode?: string;
+
   @IsEnum(DeviceType, {
     message: `deviceType must be one of: ${Object.values(DeviceType).join(', ')}`,
   })
