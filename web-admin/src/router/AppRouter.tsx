@@ -1,8 +1,10 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import { AppLayout } from '../components/layout/AppLayout';
 import { OverviewPage } from '../pages/OverviewPage';
+import { DeviceMonitoringPage } from '../pages/DeviceMonitoringPage';
+import { TempHumidityMonitoringPage } from '../pages/monitoring/TempHumidityMonitoringPage';
 import { HomesPage } from '../pages/HomesPage';
 import { RoomsPage } from '../pages/RoomsPage';
 import { DevicesPage } from '../pages/DevicesPage';
@@ -35,6 +37,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// Device router redirect helper
+const DeviceMonitoringRedirect: React.FC = () => {
+  const { deviceUid } = useParams<{ deviceUid: string }>();
+  return <Navigate to={`/monitoring/temp-humidity/${deviceUid}`} replace />;
+};
+
 export const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
@@ -50,7 +58,13 @@ export const AppRouter: React.FC = () => {
             </ProtectedRoute>
           }
         >
+          {/* Monitoring Group */}
           <Route index element={<OverviewPage />} />
+          <Route path="monitoring" element={<DeviceMonitoringPage />} />
+          <Route path="monitoring/temp-humidity/:deviceUid" element={<TempHumidityMonitoringPage />} />
+          <Route path="monitoring/:deviceUid" element={<DeviceMonitoringRedirect />} />
+
+          {/* Manajemen Group */}
           <Route path="homes" element={<HomesPage />} />
           <Route path="rooms" element={<RoomsPage />} />
           <Route path="devices" element={<DevicesPage />} />
