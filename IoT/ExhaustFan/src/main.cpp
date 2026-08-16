@@ -28,7 +28,7 @@ const char* telemetryTopic = "iot/telemetry";
 // ============================================================
 void publishState(bool force = false) {
   // Construct JSON State Payload compatible with Backend DTO & Web Admin
-  StaticJsonDocument<384> doc;
+  JsonDocument doc;
   doc["pairingCode"]      = PAIRING_CODE;
   doc["macAddress"]       = deviceMac;
   doc["deviceUid"]        = DEFAULT_DEVICE_UID;
@@ -75,7 +75,7 @@ void mqttCallback(char* topic, byte* payloadBytes, unsigned int length) {
   Serial.println(message);
 
   // 2. Parse JSON Command
-  StaticJsonDocument<384> doc;
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, message);
   if (err) {
     Serial.print("[MQTT] JSON parse error: ");

@@ -14,7 +14,7 @@ class ExhaustFanFSM {
 public:
   ExhaustFanFSM();
 
-  // Initialization (Pin modes, attach servo, read initial limit switches, safe boot state)
+  // Initialization (Pin modes, attach servo, read initial limit switch, safe boot state)
   void begin();
 
   // Non-blocking tick called inside main loop()
@@ -40,7 +40,7 @@ public:
 
 private:
   // Hardware I/O Read/Write
-  DuctPosition readRawLimitSwitches();
+  DuctPosition readRawLimitSwitch();
   void setRelayPower(bool on);
   void setRelayDirection(FanDirection dir);
 
@@ -69,8 +69,7 @@ private:
   uint8_t _pinRelayPower;
   uint8_t _pinRelayDirection;
   uint8_t _pinServo;
-  uint8_t _pinLimitOpen;
-  uint8_t _pinLimitClose;
+  uint8_t _pinLimitSwitch;
 
   // Servo instance
   Servo _servo;

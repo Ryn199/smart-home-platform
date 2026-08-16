@@ -24,14 +24,12 @@
   #define PIN_RELAY_POWER       26    // Relay 1: Controls Main Fan AC Power
   #define PIN_RELAY_DIRECTION   27    // Relay 2: Direction (NC = EXHAUST, NO = INTAKE)
   #define PIN_SERVO             13    // Servo pin: Cord pull mechanism for duct
-  #define PIN_LIMIT_OPEN        32    // Limit Switch 1: Duct fully OPEN (Active LOW with pullup)
-  #define PIN_LIMIT_CLOSE       33    // Limit Switch 2: Duct fully CLOSED (Active LOW with pullup)
+  #define PIN_LIMIT_SWITCH      32    // Single Limit Switch with internal INPUT_PULLUP
 #elif defined(ESP8266)
   #define PIN_RELAY_POWER       12    // D6 (GPIO12)
   #define PIN_RELAY_DIRECTION   14    // D5 (GPIO14)
   #define PIN_SERVO             13    // D7 (GPIO13)
-  #define PIN_LIMIT_OPEN        4     // D2 (GPIO4)
-  #define PIN_LIMIT_CLOSE       5     // D1 (GPIO5)
+  #define PIN_LIMIT_SWITCH      4     // D2 (GPIO4)
 #endif
 
 // 5. Active Logic Levels
@@ -39,8 +37,11 @@
 #define RELAY_ACTIVE_LEVEL      LOW
 #define RELAY_INACTIVE_LEVEL    HIGH
 
-// Limit switches connected to GND with INPUT_PULLUP (Active LOW when pressed)
-#define LIMIT_ACTIVE_LEVEL      LOW
+// Single Limit switch connected with INPUT_PULLUP:
+// - Switch Tertekan (Short to GND / LOW)   = Duct TERTUTUP (CLOSED)
+// - Switch Terbuka  (Open Circuit / HIGH)  = Duct DIBUKA (OPEN)
+#define LIMIT_CLOSED_LEVEL      LOW
+#define LIMIT_OPEN_LEVEL        HIGH
 
 // Direction Relay Mapping
 // NC (Normally Closed) = EXHAUST (Relay INACTIVE)
@@ -52,7 +53,7 @@
 #define MOTOR_STOP_DELAY_MS         3000   // Wait 3 seconds for inertia before direction reverse
 #define RELAY_SETTLE_DELAY_MS       500    // Wait 500ms for relay contacts to debounce & settle
 #define DUCT_OPERATION_TIMEOUT_MS   6000   // Timeout if limit switch not reached within 6 seconds
-#define LIMIT_DEBOUNCE_MS           50     // Debounce filter for limit switches
+#define LIMIT_DEBOUNCE_MS           50     // Debounce filter for limit switch
 #define TELEMETRY_INTERVAL_MS       2000   // Telemetry broadcast rate (2 seconds)
 
 // 7. Servo Mechanical Pull Stroke Parameters

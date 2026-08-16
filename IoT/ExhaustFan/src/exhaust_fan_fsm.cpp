@@ -4,8 +4,7 @@ ExhaustFanFSM::ExhaustFanFSM()
   : _pinRelayPower(PIN_RELAY_POWER),
     _pinRelayDirection(PIN_RELAY_DIRECTION),
     _pinServo(PIN_SERVO),
-    _pinLimitOpen(PIN_LIMIT_OPEN),
-    _pinLimitClose(PIN_LIMIT_CLOSE),
+    _pinLimitSwitch(PIN_LIMIT_SWITCH),
     _servoSubState(SERVO_SUB_IDLE),
     _servoPullsTarget(0),
     _servoPullsCompleted(0),
@@ -23,7 +22,7 @@ ExhaustFanFSM::ExhaustFanFSM()
 }
 
 void ExhaustFanFSM::begin() {
-  Serial.println("[FSM] Initializing Smart Exhaust Fan Hardware & FSM...");
+  Serial.println("[FSM] Initializing Smart Exhaust Fan Hardware & FSM (Single Limit Switch)...");
 
   // 1. Configure Relay Outputs (SAFE DEFAULT: BOTH INACTIVE)
   pinMode(_pinRelayPower, OUTPUT);
@@ -31,9 +30,9 @@ void ExhaustFanFSM::begin() {
   setRelayPower(false);
   setRelayDirection(DIR_EXHAUST);
 
-  // 2. Configure Limit Switch Inputs with internal Pullups
-  pinMode(_pinLimitOpen, INPUT_PULLUP);
-  pinMode(_pinLimitClose, INPUT_PULLUP);
+  // 2. Configure Single Limit Switch with internal Pullup
+  // Pressed = LOW (DUCT_CLOSED), Not Pressed / Open Circuit = HIGH (DUCT_OPEN)
+  pinMode(_pinLimitSwitch, INPUT_PULLUP);
 
   // 3. Attach Servo & move to initial Rest position
   #if defined(ESP32)
@@ -48,7 +47,7 @@ void ExhaustFanFSM::begin() {
   delay(100);
 
   // 4. Initial Hardware Limit Switch Read
-  _ductPosition = readRawLimitSwitches();
+  _ductPosition = readRawLimitSwitch();
   Serial.print("[FSM] Boot Limit Detection: Duct Position is ");
   Serial.println(ductPositionToString(_ductPosition));
 
@@ -58,20 +57,15 @@ void ExhaustFanFSM::begin() {
   _stateChanged = true;
 }
 
-DuctPosition ExhaustFanFSM::readRawLimitSwitches() {
-  bool openActive = (digitalRead(_pinLimitOpen) == LIMIT_ACTIVE_LEVEL);
-  bool closeActive = (digitalRead(_pinLimitClose) == LIMIT_ACTIVE_LEVEL);
-
-  if (openActive && closeActive) {
-    return DUCT_ERROR;
-  }
-  if (openActive) {
+DuctPosition ExhaustFanFSM::readRawLimitSwitch() {
+  int pinVal = digitalRead(_pinLimitSwitch);
+  // Switch Tertekan (LOW) = Duct Tertutup
+  // Switch Terbuka / Tidak ditekan (HIGH) = Duct Dibuka
+  if (pinVal == LIMIT_CLOSED_LEVEL) {
+    return DUCT_CLOSED;
+  } else {
     return DUCT_OPEN;
   }
-  if (closeActive) {
-    return DUCT_CLOSED;
-  }
-  return DUCT_UNKNOWN;
 }
 
 void ExhaustFanFSM::setRelayPower(bool on) {
@@ -217,16 +211,8 @@ void ExhaustFanFSM::update() {
   // 1. Always service non-blocking servo movement
   updateServoSubFSM();
 
-  // 2. Read live Limit Switches
-  DuctPosition rawPos = readRawLimitSwitches();
-
-  // 3. Safety Interlock: Dual limit switches active at the same time is an invalid state
-  if (rawPos == DUCT_ERROR) {
-    if (_operationState != STATE_ERROR) {
-      triggerError(ERR_DUCT_POSITION_INVALID);
-    }
-    return;
-  }
+  // 2. Read live Limit Switch
+  DuctPosition rawPos = readRawLimitSwitch();
 
   // Update duct position unless currently in transit
   if (_operationState != STATE_OPENING_DUCT && _operationState != STATE_CLOSING_DUCT) {
@@ -236,7 +222,7 @@ void ExhaustFanFSM::update() {
     }
   }
 
-  // 4. State Dispatcher
+  // 3. State Dispatcher
   switch (_operationState) {
     case STATE_BOOTING:
       handleBooting();
@@ -282,7 +268,7 @@ void ExhaustFanFSM::handleBooting() {
   // Safe boot: Fan power is OFF, Direction is checked, Duct is evaluated
   setRelayPower(false);
 
-  DuctPosition pos = readRawLimitSwitches();
+  DuctPosition pos = readRawLimitSwitch();
   _ductPosition = pos;
 
   if (millis() - _stateTimer >= 1000) {
@@ -315,7 +301,7 @@ void ExhaustFanFSM::handleIdle() {
 
   // Check if user requested ON
   if (_desiredPower) {
-    DuctPosition pos = readRawLimitSwitches();
+    DuctPosition pos = readRawLimitSwitch();
     if (pos == DUCT_OPEN) {
       // Duct already open: check direction or start
       if (_actualDirection != _desiredDirection) {
@@ -324,7 +310,7 @@ void ExhaustFanFSM::handleIdle() {
         setOperationState(STATE_STARTING_FAN);
       }
     } else {
-      // Duct is closed or unknown: initiate OPENING
+      // Duct is closed: initiate OPENING
       setOperationState(STATE_OPENING_DUCT);
       _ductOperationTimer = millis();
       _ductPosition = DUCT_OPENING;
@@ -332,8 +318,8 @@ void ExhaustFanFSM::handleIdle() {
     }
   } else {
     // If duct is not CLOSED and user wants OFF, close duct
-    DuctPosition pos = readRawLimitSwitches();
-    if (pos == DUCT_OPEN || pos == DUCT_UNKNOWN) {
+    DuctPosition pos = readRawLimitSwitch();
+    if (pos == DUCT_OPEN) {
       setOperationState(STATE_CLOSING_DUCT);
       _ductOperationTimer = millis();
       _ductPosition = DUCT_CLOSING;
@@ -348,9 +334,9 @@ void ExhaustFanFSM::handleOpeningDuct() {
     setRelayPower(false);
   }
 
-  DuctPosition pos = readRawLimitSwitches();
+  DuctPosition pos = readRawLimitSwitch();
   if (pos == DUCT_OPEN) {
-    Serial.println("[FSM] Duct OPEN limit switch verified!");
+    Serial.println("[FSM] Duct OPEN verified (Switch open circuit)!");
     _ductPosition = DUCT_OPEN;
     stopServo();
 
@@ -384,9 +370,9 @@ void ExhaustFanFSM::handleClosingDuct() {
     setRelayPower(false);
   }
 
-  DuctPosition pos = readRawLimitSwitches();
+  DuctPosition pos = readRawLimitSwitch();
   if (pos == DUCT_CLOSED) {
-    Serial.println("[FSM] Duct CLOSED limit switch verified!");
+    Serial.println("[FSM] Duct CLOSED verified (Switch pressed)!");
     _ductPosition = DUCT_CLOSED;
     stopServo();
     setOperationState(STATE_IDLE);
@@ -472,7 +458,7 @@ void ExhaustFanFSM::handleWaitingRelaySettle() {
 
 void ExhaustFanFSM::handleStartingFan() {
   // SAFETY INTERLOCK 2: Fan CANNOT turn ON unless duct is verified OPEN
-  DuctPosition pos = readRawLimitSwitches();
+  DuctPosition pos = readRawLimitSwitch();
   if (pos != DUCT_OPEN) {
     Serial.println("[FSM] Safety Warning: Cannot start fan because duct is not OPEN. Re-opening...");
     setOperationState(STATE_OPENING_DUCT);
@@ -495,7 +481,7 @@ void ExhaustFanFSM::handleStartingFan() {
 
 void ExhaustFanFSM::handleRunning() {
   // 1. Verify Duct remains OPEN during run
-  DuctPosition pos = readRawLimitSwitches();
+  DuctPosition pos = readRawLimitSwitch();
   if (pos != DUCT_OPEN) {
     Serial.println("[FSM][SAFETY] Duct is no longer OPEN while running! Stopping fan immediately.");
     setOperationState(STATE_STOPPING_FAN);
