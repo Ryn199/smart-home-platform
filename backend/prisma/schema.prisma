@@ -1,0 +1,183 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// USER
+// ============================================================
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ============================================================
+// HOME
+// ============================================================
+
+model Home {
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rooms       Room[]
+  automations Automation[]
+
+  @@map("homes")
+}
+
+// ============================================================
+// ROOM
+// ============================================================
+
+model Room {
+  id        Int      @id @default(autoincrement())
+  homeId    Int
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  home    Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  devices Device[]
+
+  @@index([homeId])
+  @@map("rooms")
+}
+
+// ============================================================
+// DEVICE
+// ============================================================
+
+enum DeviceType {
+  ESP32
+  ESP8266
+  GENERIC
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
+model Device {
+  id         Int          @id @default(autoincrement())
+  roomId     Int
+  name       String
+  deviceUid  String       @unique
+  type       DeviceType   @default(ESP32)
+  status     DeviceStatus @default(UNKNOWN)
+  lastSeenAt DateTime?
+  metadata   Json?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  room     Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sensors  Sensor[]
+  commands DeviceCommand[]
+
+  @@index([roomId])
+  @@index([deviceUid])
+  @@index([lastSeenAt])
+  @@map("devices")
+}
+
+// ============================================================
+// SENSOR
+// ============================================================
+
+model Sensor {
+  id        Int      @id @default(autoincrement())
+  deviceId  Int
+  type      String   // e.g. "temperature", "humidity", "pressure", "motion"
+  name      String
+  unit      String   // e.g. "°C", "%", "hPa"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  device   Device          @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  readings SensorReading[]
+
+  @@index([deviceId])
+  @@map("sensors")
+}
+
+// ============================================================
+// SENSOR READING (high-volume table — indexed carefully)
+// ============================================================
+
+model SensorReading {
+  id         Int      @id @default(autoincrement())
+  sensorId   Int
+  value      Float
+  recordedAt DateTime @default(now())
+
+  sensor Sensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+
+  // Critical indexes for time-series queries
+  @@index([sensorId])
+  @@index([recordedAt])
+  @@index([sensorId, recordedAt])
+  @@map("sensor_readings")
+}
+
+// ============================================================
+// DEVICE COMMAND
+// ============================================================
+
+enum CommandStatus {
+  PENDING
+  SENT
+  ACKNOWLEDGED
+  FAILED
+}
+
+model DeviceCommand {
+  id         Int           @id @default(autoincrement())
+  deviceId   Int
+  command    String        // e.g. "relay.set", "led.toggle"
+  payload    Json?         // command-specific parameters
+  status     CommandStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  executedAt DateTime?
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([status])
+  @@map("device_commands")
+}
+
+// ============================================================
+// AUTOMATION
+// ============================================================
+
+model Automation {
+  id            Int      @id @default(autoincrement())
+  homeId        Int
+  name          String
+  enabled       Boolean  @default(true)
+  configuration Json     // simple JSON rule definition — extensible
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  home Home @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@index([homeId])
+  @@map("automations")
+}
