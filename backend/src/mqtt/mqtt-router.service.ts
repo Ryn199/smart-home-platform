@@ -4,7 +4,7 @@ import { validate } from 'class-validator';
 import { MqttService } from './mqtt.service';
 import { ParsedMqttTopic } from './mqtt.types';
 import { DevicesService } from '../devices/devices.service';
-import { CustomSensorsService } from '../custom-sensors/custom-sensors.service';
+import { TempHumidityService } from '../temp-humidity/temp-humidity.service';
 import { SmartDoorService } from '../smart-door/smart-door.service';
 import { SmartDoorStateDto } from '../smart-door/dto/smart-door-state.dto';
 import { SmartCurtainService } from '../smart-curtain/smart-curtain.service';
@@ -21,7 +21,7 @@ export class MqttRouterService implements OnModuleInit {
   constructor(
     private readonly mqttService: MqttService,
     private readonly devicesService: DevicesService,
-    private readonly customSensorsService: CustomSensorsService,
+    private readonly tempHumidityService: TempHumidityService,
     private readonly smartDoorService: SmartDoorService,
     private readonly smartCurtainService: SmartCurtainService,
     private readonly exhaustFanService: ExhaustFanService,
@@ -85,9 +85,9 @@ export class MqttRouterService implements OnModuleInit {
     const messageType = parsedTopic.messageType;
 
     switch (device.deviceType) {
-      case DeviceType.CUSTOM_SENSOR:
+      case DeviceType.TEMP_HUMIDITY:
         if (messageType === 'telemetry' || messageType === 'state') {
-          await this.customSensorsService.handleTelemetry(device, payload);
+          await this.tempHumidityService.handleState(device, payload);
         }
         break;
 

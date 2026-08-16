@@ -6,7 +6,6 @@ import { OverviewPage } from '../pages/OverviewPage';
 import { HomesPage } from '../pages/HomesPage';
 import { RoomsPage } from '../pages/RoomsPage';
 import { DevicesPage } from '../pages/DevicesPage';
-import { SensorsPage } from '../pages/SensorsPage';
 import { AutomationsPage } from '../pages/AutomationsPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { LoginPage } from '../pages/LoginPage';
@@ -55,7 +54,6 @@ export const AppRouter: React.FC = () => {
           <Route path="homes" element={<HomesPage />} />
           <Route path="rooms" element={<RoomsPage />} />
           <Route path="devices" element={<DevicesPage />} />
-          <Route path="sensors" element={<SensorsPage />} />
           <Route path="automations" element={<AutomationsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>

@@ -28,7 +28,7 @@ export class CreateDeviceDto {
     message: `deviceType must be one of: ${Object.values(DeviceType).join(', ')}`,
   })
   @IsOptional()
-  deviceType?: DeviceType = DeviceType.CUSTOM_SENSOR;
+  deviceType?: DeviceType = DeviceType.TEMP_HUMIDITY;
 
   @IsObject()
   @IsOptional()

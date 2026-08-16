@@ -7,7 +7,6 @@ const navigationItems = [
   { name: 'Homes', path: '/homes', icon: 'home' },
   { name: 'Rooms', path: '/rooms', icon: 'grid_view' },
   { name: 'Devices', path: '/devices', icon: 'devices' },
-  { name: 'Sensors', path: '/sensors', icon: 'sensors' },
   { name: 'Automations', path: '/automations', icon: 'auto_mode' },
   { name: 'Settings', path: '/settings', icon: 'settings' },
 ];

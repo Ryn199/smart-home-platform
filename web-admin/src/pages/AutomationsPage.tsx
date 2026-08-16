@@ -352,9 +352,8 @@ export const AutomationsPage: React.FC = () => {
                       onChange={(e) => setSensorType(e.target.value)}
                       className="w-full p-2 border border-outline-variant rounded-lg bg-surface text-xs"
                     >
-                      <option value="temperature">Temperature</option>
-                      <option value="humidity">Humidity</option>
-                      <option value="pressure">Pressure</option>
+                      <option value="temperature">Temperature (°C)</option>
+                      <option value="humidity">Humidity (%)</option>
                     </select>
                   </div>
                   <div>

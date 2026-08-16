@@ -7,7 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { HomesModule } from './homes/homes.module';
 import { RoomsModule } from './rooms/rooms.module';
 import { DevicesModule } from './devices/devices.module';
-import { CustomSensorsModule } from './custom-sensors/custom-sensors.module';
+import { TempHumidityModule } from './temp-humidity/temp-humidity.module';
 import { SmartDoorModule } from './smart-door/smart-door.module';
 import { SmartCurtainModule } from './smart-curtain/smart-curtain.module';
 import { ExhaustFanModule } from './exhaust-fan/exhaust-fan.module';
@@ -27,7 +27,7 @@ import { AutomationModule } from './automation/automation.module';
     HomesModule,
     RoomsModule,
     DevicesModule,
-    CustomSensorsModule,
+    TempHumidityModule,
     SmartDoorModule,
     SmartCurtainModule,
     ExhaustFanModule,

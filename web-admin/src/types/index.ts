@@ -1,5 +1,5 @@
 export type DeviceType =
-  | 'CUSTOM_SENSOR'
+  | 'TEMP_HUMIDITY'
   | 'SMART_DOOR'
   | 'SMART_CURTAIN'
   | 'EXHAUST_FAN';
@@ -57,9 +57,7 @@ export interface Device {
   createdAt: string;
   updatedAt: string;
   room?: Room & { home?: Home };
-  sensors?: Sensor[];
   _count?: {
-    sensors: number;
     commands: number;
   };
 }
@@ -74,31 +72,6 @@ export interface DevicePresenceInfo {
   secondsSinceLastSeen: number | null;
 }
 
-export interface Sensor {
-  id: number;
-  deviceId: number;
-  type: string;
-  name: string;
-  unit: string;
-  createdAt: string;
-  updatedAt: string;
-  device?: Device;
-  readings?: SensorReading[];
-}
-
-export interface SensorReading {
-  id: number;
-  sensorId: number;
-  value: number;
-  recordedAt: string;
-}
-
-export interface SensorReadingsResponse {
-  sensor: Sensor;
-  total: number;
-  readings: SensorReading[];
-}
-
 export interface DeviceCommand {
   id: number;
   deviceId: number;
@@ -109,24 +82,9 @@ export interface DeviceCommand {
   executedAt?: string | null;
 }
 
-export interface SmartDoorState {
-  door: 'open' | 'closed';
-  lock: 'locked' | 'unlocked';
-}
-
-export interface SmartCurtainState {
-  position: number;
-  state: 'opening' | 'closing' | 'stopped';
-}
-
-export interface ExhaustFanState {
-  power: boolean;
-  speed: number;
-}
-
 export interface SensorTriggerConfig {
   type: 'sensor_threshold';
-  sensorType: string;
+  sensorType: 'temperature' | 'humidity' | string;
   operator: '>' | '>=' | '<' | '<=' | '==' | '!=';
   value: number;
 }
@@ -139,17 +97,40 @@ export interface AutomationActionConfig {
   payload?: Record<string, unknown>;
 }
 
+export interface AutomationRuleConfig {
+  trigger?: SensorTriggerConfig;
+  action?: AutomationActionConfig;
+}
+
 export interface Automation {
   id: number;
   homeId: number;
   name: string;
   enabled: boolean;
-  configuration: {
-    trigger?: SensorTriggerConfig;
-    action?: AutomationActionConfig;
-    [key: string]: unknown;
-  };
+  configuration: AutomationRuleConfig;
   createdAt: string;
   updatedAt: string;
   home?: Home;
+}
+
+// Specialized Domain States
+export interface TempHumidityState {
+  temperature?: number;
+  humidity?: number;
+  lastUpdated?: string;
+}
+
+export interface SmartDoorState {
+  door: 'open' | 'closed';
+  lock: 'locked' | 'unlocked';
+}
+
+export interface SmartCurtainState {
+  position: number; // 0 (closed) to 100 (open)
+  state: 'opening' | 'closing' | 'stopped';
+}
+
+export interface ExhaustFanState {
+  power: boolean;
+  speed: number; // 0, 1, 2, 3
 }

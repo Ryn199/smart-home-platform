@@ -74,33 +74,25 @@ describe('DeviceCardRenderer', () => {
     expect(screen.getByText('Running')).toBeInTheDocument();
   });
 
-  it('renders CustomSensorCard for CUSTOM_SENSOR device', () => {
+  it('renders TempHumidityCard for TEMP_HUMIDITY device', () => {
     const device: Device = {
       id: 4,
       roomId: 1,
-      name: 'Climate Monitor',
-      deviceUid: 'sensor-001',
-      deviceType: 'CUSTOM_SENSOR',
+      name: 'Room Climate Sensor',
+      deviceUid: 'th-001',
+      deviceType: 'TEMP_HUMIDITY',
       status: 'ONLINE',
       lastSeenAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      sensors: [
-        {
-          id: 1,
-          deviceId: 4,
-          type: 'temperature',
-          name: 'Temperature',
-          unit: '°C',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          readings: [{ id: 1, sensorId: 1, value: 29.5, recordedAt: new Date().toISOString() }],
-        },
-      ],
+      metadata: { temperature: 27.5, humidity: 62 },
     };
 
     render(<DeviceCardRenderer device={device} />);
-    expect(screen.getByText('Climate Monitor')).toBeInTheDocument();
-    expect(screen.getByText('29.5°C')).toBeInTheDocument();
+    expect(screen.getByText('Room Climate Sensor')).toBeInTheDocument();
+    expect(screen.getByText('27.5')).toBeInTheDocument();
+    expect(screen.getByText('62')).toBeInTheDocument();
+    expect(screen.getByText('Temperature')).toBeInTheDocument();
+    expect(screen.getByText('Humidity')).toBeInTheDocument();
   });
 });

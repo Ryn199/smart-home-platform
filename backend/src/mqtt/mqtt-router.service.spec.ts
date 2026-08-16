@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MqttRouterService } from './mqtt-router.service';
 import { MqttService } from './mqtt.service';
 import { DevicesService } from '../devices/devices.service';
-import { CustomSensorsService } from '../custom-sensors/custom-sensors.service';
+import { TempHumidityService } from '../temp-humidity/temp-humidity.service';
 import { SmartDoorService } from '../smart-door/smart-door.service';
 import { SmartCurtainService } from '../smart-curtain/smart-curtain.service';
 import { ExhaustFanService } from '../exhaust-fan/exhaust-fan.service';
@@ -14,7 +14,7 @@ describe('MqttRouterService', () => {
   let service: MqttRouterService;
   let mqttService: { registerHandler: jest.Mock };
   let devicesService: { findByDeviceUid: jest.Mock; updateLastSeen: jest.Mock };
-  let customSensorsService: { handleTelemetry: jest.Mock };
+  let tempHumidityService: { handleState: jest.Mock };
   let smartDoorService: { updateState: jest.Mock };
   let smartCurtainService: { updateState: jest.Mock };
   let exhaustFanService: { updateState: jest.Mock };
@@ -25,7 +25,7 @@ describe('MqttRouterService', () => {
       findByDeviceUid: jest.fn(),
       updateLastSeen: jest.fn().mockResolvedValue({}),
     };
-    customSensorsService = { handleTelemetry: jest.fn() };
+    tempHumidityService = { handleState: jest.fn() };
     smartDoorService = { updateState: jest.fn() };
     smartCurtainService = { updateState: jest.fn() };
     exhaustFanService = { updateState: jest.fn() };
@@ -42,7 +42,7 @@ describe('MqttRouterService', () => {
         MqttRouterService,
         { provide: MqttService, useValue: mqttService },
         { provide: DevicesService, useValue: devicesService },
-        { provide: CustomSensorsService, useValue: customSensorsService },
+        { provide: TempHumidityService, useValue: tempHumidityService },
         { provide: SmartDoorService, useValue: smartDoorService },
         { provide: SmartCurtainService, useValue: smartCurtainService },
         { provide: ExhaustFanService, useValue: exhaustFanService },
@@ -89,16 +89,16 @@ describe('MqttRouterService', () => {
       service.routeMessage(parsedTopic, 'home/1/1/unknown-001/telemetry', payload),
     ).resolves.not.toThrow();
 
-    expect(customSensorsService.handleTelemetry).not.toHaveBeenCalled();
+    expect(tempHumidityService.handleState).not.toHaveBeenCalled();
   });
 
-  it('should route CUSTOM_SENSOR telemetry to CustomSensorsService', async () => {
+  it('should route TEMP_HUMIDITY telemetry to TempHumidityService', async () => {
     const mockDevice: Device = {
       id: 1,
       roomId: 1,
       name: 'Temp Sensor',
       deviceUid: 'sensor-001',
-      deviceType: DeviceType.CUSTOM_SENSOR,
+      deviceType: DeviceType.TEMP_HUMIDITY,
       status: DeviceStatus.ONLINE,
       lastSeenAt: new Date(),
       metadata: null,
@@ -119,7 +119,7 @@ describe('MqttRouterService', () => {
     await service.routeMessage(parsedTopic, 'home/1/1/sensor-001/telemetry', payload);
 
     expect(devicesService.updateLastSeen).toHaveBeenCalledWith('sensor-001');
-    expect(customSensorsService.handleTelemetry).toHaveBeenCalledWith(mockDevice, data);
+    expect(tempHumidityService.handleState).toHaveBeenCalledWith(mockDevice, data);
   });
 
   it('should validate and route SMART_DOOR state to SmartDoorService', async () => {

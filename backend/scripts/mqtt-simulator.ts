@@ -5,13 +5,13 @@ console.log(`[Simulator] Connecting to MQTT broker at ${brokerUrl}...`);
 
 const client = mqtt.connect(brokerUrl);
 
-// Simulated Devices Configuration
+// Simulated Devices Configuration for the 4 Dedicated Types
 const devices = [
   {
-    type: 'CUSTOM_SENSOR',
+    type: 'TEMP_HUMIDITY',
     homeId: '1',
     roomId: '1',
-    deviceUid: 'sensor-sim-001',
+    deviceUid: 'th-sim-001',
     telemetryIntervalMs: 5000,
   },
   {
@@ -49,19 +49,18 @@ client.on('connect', () => {
     });
   }
 
-  // Start periodic telemetry for CUSTOM_SENSOR
+  // Start periodic telemetry for TEMP_HUMIDITY
   setInterval(() => {
-    const sensorDevice = devices.find((d) => d.type === 'CUSTOM_SENSOR');
+    const sensorDevice = devices.find((d) => d.type === 'TEMP_HUMIDITY');
     if (sensorDevice) {
       const topic = `home/${sensorDevice.homeId}/${sensorDevice.roomId}/${sensorDevice.deviceUid}/telemetry`;
       const payload = {
         temperature: parseFloat((24 + Math.random() * 6).toFixed(1)),
         humidity: parseFloat((50 + Math.random() * 20).toFixed(1)),
-        pressure: parseFloat((1010 + Math.random() * 5).toFixed(1)),
       };
 
       client.publish(topic, JSON.stringify(payload));
-      console.log(`[Simulator] Published telemetry -> ${topic}:`, payload);
+      console.log(`[Simulator] Published Temp/Humidity -> ${topic}:`, payload);
     }
   }, 5000);
 

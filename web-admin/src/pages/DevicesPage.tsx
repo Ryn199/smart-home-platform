@@ -18,7 +18,7 @@ export const DevicesPage: React.FC = () => {
   // Form states
   const [name, setName] = useState('');
   const [deviceUid, setDeviceUid] = useState('');
-  const [deviceType, setDeviceType] = useState<DeviceType>('CUSTOM_SENSOR');
+  const [deviceType, setDeviceType] = useState<DeviceType>('TEMP_HUMIDITY');
   const [roomId, setRoomId] = useState<number>(1);
 
   // Fetch homes to extract rooms
@@ -81,7 +81,7 @@ export const DevicesPage: React.FC = () => {
     setEditingDevice(null);
     setName('');
     setDeviceUid('');
-    setDeviceType('CUSTOM_SENSOR');
+    setDeviceType('TEMP_HUMIDITY');
     if (allRooms.length > 0) setRoomId(allRooms[0].id);
     setErrorMessage(null);
     setIsModalOpen(true);
@@ -146,17 +146,25 @@ export const DevicesPage: React.FC = () => {
             Devices Inventory
           </h2>
           <p className="text-sm text-on-surface-variant">
-            Register and manage ESP32 nodes and smart appliances.
+            Register and manage ESP32 nodes and smart appliances across 4 specialized domains.
           </p>
         </div>
         <button
           onClick={openCreateModal}
-          className="flex items-center gap-xs px-4 py-2 bg-primary text-on-primary font-body-md rounded-lg hover:bg-primary/90 transition-colors shadow-sm cursor-pointer active:scale-98"
+          disabled={allRooms.length === 0}
+          className="flex items-center gap-xs px-4 py-2 bg-primary text-on-primary font-body-md rounded-lg hover:bg-primary/90 transition-colors shadow-sm cursor-pointer active:scale-98 disabled:opacity-50"
         >
           <span className="material-symbols-outlined text-[20px]">add</span>
           Register Device
         </button>
       </div>
+
+      {allRooms.length === 0 && (
+        <div className="p-4 bg-primary-container/10 border border-primary/20 rounded-xl text-primary text-sm flex items-center gap-2">
+          <span className="material-symbols-outlined">info</span>
+          <span>Please create at least one Home & Room before registering devices.</span>
+        </div>
+      )}
 
       {/* Filter Toolbar */}
       <div className="flex flex-wrap items-center gap-md p-md bg-surface border border-outline-variant rounded-xl shadow-sm">
@@ -170,10 +178,10 @@ export const DevicesPage: React.FC = () => {
             className="px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-sm focus:outline-none"
           >
             <option value="ALL">All Device Types</option>
-            <option value="CUSTOM_SENSOR">Custom Sensor</option>
+            <option value="TEMP_HUMIDITY">Temperature & Humidity Node</option>
             <option value="SMART_DOOR">Smart Door</option>
             <option value="SMART_CURTAIN">Smart Curtain</option>
-            <option value="EXHAUST_FAN">Exhaust Fan</option>
+            <option value="EXHAUST_FAN">Smart Exhaust Fan</option>
           </select>
         </div>
 
@@ -231,7 +239,7 @@ export const DevicesPage: React.FC = () => {
                       {device.deviceUid}
                     </td>
                     <td className="px-lg py-md">
-                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-container-highest text-on-surface-variant">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-container-highest text-on-surface-variant font-data-mono">
                         {device.deviceType}
                       </span>
                     </td>
@@ -312,7 +320,7 @@ export const DevicesPage: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Front Door, Kitchen Fan, Climate Sensor"
+                  placeholder="e.g. Living Room DHT22, Front Door Lock, Kitchen Fan"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm"
@@ -327,7 +335,7 @@ export const DevicesPage: React.FC = () => {
                   type="text"
                   required
                   disabled={!!editingDevice}
-                  placeholder="e.g. door-001, sensor-001, fan-001"
+                  placeholder="e.g. th-001, door-001, fan-001, curtain-001"
                   value={deviceUid}
                   onChange={(e) => setDeviceUid(e.target.value)}
                   className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm font-data-mono disabled:opacity-50 disabled:bg-surface-container-low"
@@ -344,7 +352,7 @@ export const DevicesPage: React.FC = () => {
                   onChange={(e) => setDeviceType(e.target.value as DeviceType)}
                   className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm disabled:opacity-50 disabled:bg-surface-container-low"
                 >
-                  <option value="CUSTOM_SENSOR">CUSTOM_SENSOR (Telemetry Readings)</option>
+                  <option value="TEMP_HUMIDITY">TEMP_HUMIDITY (Temperature & Humidity)</option>
                   <option value="SMART_DOOR">SMART_DOOR (Lock/Unlock)</option>
                   <option value="SMART_CURTAIN">SMART_CURTAIN (Motor Position)</option>
                   <option value="EXHAUST_FAN">EXHAUST_FAN (Speed & Power)</option>

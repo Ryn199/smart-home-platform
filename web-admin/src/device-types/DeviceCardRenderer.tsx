@@ -3,7 +3,7 @@ import { Device } from '../types';
 import { SmartDoorCard } from './smart-door/SmartDoorCard';
 import { SmartCurtainCard } from './smart-curtain/SmartCurtainCard';
 import { ExhaustFanCard } from './exhaust-fan/ExhaustFanCard';
-import { CustomSensorCard } from './custom-sensor/CustomSensorCard';
+import { TempHumidityCard } from './temp-humidity/TempHumidityCard';
 
 interface DeviceCardRendererProps {
   device: Device;
@@ -11,14 +11,15 @@ interface DeviceCardRendererProps {
 
 export const DeviceCardRenderer: React.FC<DeviceCardRendererProps> = ({ device }) => {
   switch (device.deviceType) {
+    case 'TEMP_HUMIDITY':
+      return <TempHumidityCard device={device} />;
     case 'SMART_DOOR':
       return <SmartDoorCard device={device} />;
     case 'SMART_CURTAIN':
       return <SmartCurtainCard device={device} />;
     case 'EXHAUST_FAN':
       return <ExhaustFanCard device={device} />;
-    case 'CUSTOM_SENSOR':
     default:
-      return <CustomSensorCard device={device} />;
+      return <TempHumidityCard device={device} />;
   }
 };

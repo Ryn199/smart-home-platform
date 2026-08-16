@@ -60,11 +60,11 @@ model Room {
 }
 
 // ============================================================
-// DEVICE
+// DEVICE (Specialized into 4 concrete domains)
 // ============================================================
 
 enum DeviceType {
-  CUSTOM_SENSOR
+  TEMP_HUMIDITY
   SMART_DOOR
   SMART_CURTAIN
   EXHAUST_FAN
@@ -81,60 +81,20 @@ model Device {
   roomId     Int
   name       String
   deviceUid  String       @unique
-  deviceType DeviceType   @default(CUSTOM_SENSOR)
+  deviceType DeviceType   @default(TEMP_HUMIDITY)
   status     DeviceStatus @default(UNKNOWN)
   lastSeenAt DateTime?
-  metadata   Json?
+  metadata   Json?        // Holds live domain state (e.g. { temperature: 28.5, humidity: 65 })
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
   room     Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  sensors  Sensor[]
   commands DeviceCommand[]
 
   @@index([roomId])
   @@index([deviceUid])
   @@index([lastSeenAt])
   @@map("devices")
-}
-
-// ============================================================
-// SENSOR
-// ============================================================
-
-model Sensor {
-  id        Int      @id @default(autoincrement())
-  deviceId  Int
-  type      String   // e.g. "temperature", "humidity", "pressure", "motion"
-  name      String
-  unit      String   // e.g. "°C", "%", "hPa"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  device   Device          @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  readings SensorReading[]
-
-  @@index([deviceId])
-  @@map("sensors")
-}
-
-// ============================================================
-// SENSOR READING (high-volume table — indexed carefully)
-// ============================================================
-
-model SensorReading {
-  id         Int      @id @default(autoincrement())
-  sensorId   Int
-  value      Float
-  recordedAt DateTime @default(now())
-
-  sensor Sensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
-
-  // Critical indexes for time-series queries
-  @@index([sensorId])
-  @@index([recordedAt])
-  @@index([sensorId, recordedAt])
-  @@map("sensor_readings")
 }
 
 // ============================================================
@@ -151,7 +111,7 @@ enum CommandStatus {
 model DeviceCommand {
   id         Int           @id @default(autoincrement())
   deviceId   Int
-  command    String        // e.g. "relay.set", "led.toggle"
+  command    String        // e.g. "set_speed", "lock", "unlock", "set_position"
   payload    Json?         // command-specific parameters
   status     CommandStatus @default(PENDING)
   createdAt  DateTime      @default(now())
@@ -173,7 +133,7 @@ model Automation {
   homeId        Int
   name          String
   enabled       Boolean  @default(true)
-  configuration Json     // simple JSON rule definition — extensible
+  configuration Json     // Automation rule configuration: trigger & action
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -94,7 +94,7 @@ export class DevicesService {
         roomId: dto.roomId,
         name: dto.name,
         deviceUid: dto.deviceUid,
-        deviceType: dto.deviceType ?? DeviceType.CUSTOM_SENSOR,
+        deviceType: dto.deviceType ?? DeviceType.TEMP_HUMIDITY,
         status: DeviceStatus.UNKNOWN,
         metadata: dto.metadata ? (dto.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
       },
@@ -134,7 +134,7 @@ export class DevicesService {
           },
         },
         _count: {
-          select: { sensors: true, commands: true },
+          select: { commands: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -158,7 +158,6 @@ export class DevicesService {
             home: true,
           },
         },
-        sensors: true,
       },
     });
 
@@ -196,7 +195,7 @@ export class DevicesService {
       where: { roomId },
       include: {
         _count: {
-          select: { sensors: true },
+          select: { commands: true },
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -259,6 +258,17 @@ export class DevicesService {
     return this.attachComputedStatus(updated);
   }
 
+  async updateMetadata(id: number, metadata: Record<string, unknown>): Promise<Device> {
+    const updated = await this.prisma.device.update({
+      where: { id },
+      data: {
+        metadata: metadata as Prisma.InputJsonValue,
+      },
+    });
+
+    return this.attachComputedStatus(updated);
+  }
+
   async executeCommand(id: number, dto: ExecuteCommandDto): Promise<DeviceCommand> {
     const device = await this.prisma.device.findUnique({
       where: { id },
@@ -303,7 +313,7 @@ export class DevicesService {
         break;
       }
 
-      case DeviceType.CUSTOM_SENSOR:
+      case DeviceType.TEMP_HUMIDITY:
       default: {
         if (!dto.action) {
           throw new BadRequestException('action is required');
