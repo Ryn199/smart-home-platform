@@ -13,8 +13,9 @@ import {
 import { DevicePresenceInfo, DevicesService } from './devices.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
+import { ExecuteCommandDto } from './dto/execute-command.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Device, DeviceStatus, DeviceType } from '@prisma/client';
+import { Device, DeviceCommand, DeviceStatus, DeviceType } from '@prisma/client';
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -47,6 +48,22 @@ export class DevicesController {
   @Get('devices/:id/presence')
   async getPresence(@Param('id', ParseIntPipe) id: number): Promise<DevicePresenceInfo> {
     return this.devicesService.getPresence(id);
+  }
+
+  @Post('devices/:id/commands')
+  async executeCommand(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ExecuteCommandDto,
+  ): Promise<DeviceCommand> {
+    return this.devicesService.executeCommand(id, dto);
+  }
+
+  @Get('devices/:id/commands')
+  async getCommands(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('limit') limit?: string,
+  ): Promise<DeviceCommand[]> {
+    return this.devicesService.getCommands(id, limit ? parseInt(limit, 10) : undefined);
   }
 
   @Patch('devices/:id')

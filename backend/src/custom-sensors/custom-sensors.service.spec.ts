@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CustomSensorsService } from './custom-sensors.service';
 import { PrismaService } from '../database/prisma.service';
 import { DevicesService } from '../devices/devices.service';
+import { EventsGateway } from '../websocket/events.gateway';
+import { AutomationService } from '../automation/automation.service';
 import { NotFoundException } from '@nestjs/common';
 import { Device, DeviceStatus, DeviceType } from '@prisma/client';
 
@@ -41,11 +43,24 @@ describe('CustomSensorsService', () => {
       findOne: jest.fn(),
     };
 
+    const eventsGateway = {
+      emitTelemetry: jest.fn(),
+      emitDeviceState: jest.fn(),
+      emitDeviceStatus: jest.fn(),
+      emitCommandExecuted: jest.fn(),
+    };
+
+    const automationService = {
+      evaluateSensorRules: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomSensorsService,
         { provide: PrismaService, useValue: prisma },
         { provide: DevicesService, useValue: devicesService },
+        { provide: EventsGateway, useValue: eventsGateway },
+        { provide: AutomationService, useValue: automationService },
       ],
     }).compile();
 

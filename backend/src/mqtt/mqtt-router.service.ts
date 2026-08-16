@@ -11,6 +11,7 @@ import { SmartCurtainService } from '../smart-curtain/smart-curtain.service';
 import { SmartCurtainStateDto } from '../smart-curtain/dto/smart-curtain-state.dto';
 import { ExhaustFanService } from '../exhaust-fan/exhaust-fan.service';
 import { ExhaustFanStateDto } from '../exhaust-fan/dto/exhaust-fan-state.dto';
+import { EventsGateway } from '../websocket/events.gateway';
 import { Device, DeviceType } from '@prisma/client';
 
 @Injectable()
@@ -24,6 +25,7 @@ export class MqttRouterService implements OnModuleInit {
     private readonly smartDoorService: SmartDoorService,
     private readonly smartCurtainService: SmartCurtainService,
     private readonly exhaustFanService: ExhaustFanService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   onModuleInit(): void {
@@ -64,9 +66,16 @@ export class MqttRouterService implements OnModuleInit {
       return;
     }
 
-    // 3. Update device lastSeenAt
+    const now = new Date();
+
+    // 3. Update device lastSeenAt & broadcast device.status online
     try {
       await this.devicesService.updateLastSeen(device.deviceUid);
+      this.eventsGateway.emitDeviceStatus({
+        deviceUid: device.deviceUid,
+        status: 'online',
+        lastSeenAt: now,
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to update lastSeenAt for ${device.deviceUid}: ${message}`);
@@ -124,6 +133,14 @@ export class MqttRouterService implements OnModuleInit {
     }
 
     await this.smartDoorService.updateState(device.deviceUid, stateDto);
+
+    // Broadcast real-time device.state event
+    this.eventsGateway.emitDeviceState({
+      deviceUid: device.deviceUid,
+      deviceType: 'SMART_DOOR',
+      state: stateDto as unknown as Record<string, unknown>,
+    });
+
     this.logger.log(
       `Smart Door [${device.deviceUid}] state updated: door=${stateDto.door}, lock=${stateDto.lock}`,
     );
@@ -145,6 +162,14 @@ export class MqttRouterService implements OnModuleInit {
     }
 
     await this.smartCurtainService.updateState(device.deviceUid, stateDto);
+
+    // Broadcast real-time device.state event
+    this.eventsGateway.emitDeviceState({
+      deviceUid: device.deviceUid,
+      deviceType: 'SMART_CURTAIN',
+      state: stateDto as unknown as Record<string, unknown>,
+    });
+
     this.logger.log(
       `Smart Curtain [${device.deviceUid}] state updated: position=${stateDto.position}%, state=${stateDto.state}`,
     );
@@ -166,6 +191,14 @@ export class MqttRouterService implements OnModuleInit {
     }
 
     await this.exhaustFanService.updateState(device.deviceUid, stateDto);
+
+    // Broadcast real-time device.state event
+    this.eventsGateway.emitDeviceState({
+      deviceUid: device.deviceUid,
+      deviceType: 'EXHAUST_FAN',
+      state: stateDto as unknown as Record<string, unknown>,
+    });
+
     this.logger.log(
       `Exhaust Fan [${device.deviceUid}] state updated: power=${stateDto.power}, speed=${stateDto.speed}`,
     );

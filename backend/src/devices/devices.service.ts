@@ -1,10 +1,30 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { RoomsService } from '../rooms/rooms.service';
+import { MqttService } from '../mqtt/mqtt.service';
+import { EventsGateway } from '../websocket/events.gateway';
+import { SmartDoorService } from '../smart-door/smart-door.service';
+import { SmartCurtainService } from '../smart-curtain/smart-curtain.service';
+import { ExhaustFanService } from '../exhaust-fan/exhaust-fan.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
-import { Device, DeviceStatus, DeviceType, Prisma } from '@prisma/client';
+import { ExecuteCommandDto } from './dto/execute-command.dto';
+import {
+  CommandStatus,
+  Device,
+  DeviceCommand,
+  DeviceStatus,
+  DeviceType,
+  Prisma,
+} from '@prisma/client';
 
 export interface DevicePresenceInfo {
   id: number;
@@ -22,6 +42,14 @@ export class DevicesService {
     private readonly prisma: PrismaService,
     private readonly roomsService: RoomsService,
     private readonly configService: ConfigService,
+    private readonly mqttService: MqttService,
+    private readonly eventsGateway: EventsGateway,
+    @Inject(forwardRef(() => SmartDoorService))
+    private readonly smartDoorService: SmartDoorService,
+    @Inject(forwardRef(() => SmartCurtainService))
+    private readonly smartCurtainService: SmartCurtainService,
+    @Inject(forwardRef(() => ExhaustFanService))
+    private readonly exhaustFanService: ExhaustFanService,
   ) {}
 
   getOfflineThresholdSeconds(): number {
@@ -229,6 +257,101 @@ export class DevicesService {
     });
 
     return this.attachComputedStatus(updated);
+  }
+
+  async executeCommand(id: number, dto: ExecuteCommandDto): Promise<DeviceCommand> {
+    const device = await this.prisma.device.findUnique({
+      where: { id },
+      include: {
+        room: {
+          include: {
+            home: true,
+          },
+        },
+      },
+    });
+
+    if (!device) {
+      throw new NotFoundException(`Device with ID ${id} not found`);
+    }
+
+    // Validate and format command payload based on DeviceType
+    let commandPayload: Record<string, unknown> = {};
+
+    switch (device.deviceType) {
+      case DeviceType.SMART_DOOR: {
+        const validated = this.smartDoorService.validateCommand(dto.action);
+        commandPayload = { action: validated.action };
+        break;
+      }
+
+      case DeviceType.SMART_CURTAIN: {
+        const validated = this.smartCurtainService.validateCommand(dto.action, dto.position);
+        commandPayload = {
+          action: validated.action,
+          ...(validated.position !== undefined ? { position: validated.position } : {}),
+        };
+        break;
+      }
+
+      case DeviceType.EXHAUST_FAN: {
+        const validated = this.exhaustFanService.validateCommand(dto.action, dto.speed);
+        commandPayload = {
+          action: validated.action,
+          ...(validated.speed !== undefined ? { speed: validated.speed } : {}),
+        };
+        break;
+      }
+
+      case DeviceType.CUSTOM_SENSOR:
+      default: {
+        if (!dto.action) {
+          throw new BadRequestException('action is required');
+        }
+        commandPayload = dto.payload ?? { action: dto.action };
+        break;
+      }
+    }
+
+    // 1. Record command in database
+    const command = await this.prisma.deviceCommand.create({
+      data: {
+        deviceId: device.id,
+        command: dto.action,
+        payload: commandPayload as Prisma.InputJsonValue,
+        status: CommandStatus.SENT,
+      },
+    });
+
+    // 2. Publish to MQTT topic: home/{homeId}/{roomId}/{deviceUid}/command
+    const topic = this.mqttService.buildTopic(
+      device.room.home.id,
+      device.roomId,
+      device.deviceUid,
+      'command',
+    );
+
+    await this.mqttService.publish(topic, commandPayload);
+
+    // 3. Emit real-time WebSocket command event
+    this.eventsGateway.emitCommandExecuted({
+      deviceUid: device.deviceUid,
+      command: dto.action,
+      status: 'SENT',
+      executedAt: new Date(),
+    });
+
+    return command;
+  }
+
+  async getCommands(id: number, limit = 50): Promise<DeviceCommand[]> {
+    await this.findOne(id);
+
+    return this.prisma.deviceCommand.findMany({
+      where: { deviceId: id },
+      take: Math.min(limit, 100),
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async updateLastSeen(

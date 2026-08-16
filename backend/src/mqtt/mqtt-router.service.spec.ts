@@ -6,6 +6,7 @@ import { CustomSensorsService } from '../custom-sensors/custom-sensors.service';
 import { SmartDoorService } from '../smart-door/smart-door.service';
 import { SmartCurtainService } from '../smart-curtain/smart-curtain.service';
 import { ExhaustFanService } from '../exhaust-fan/exhaust-fan.service';
+import { EventsGateway } from '../websocket/events.gateway';
 import { NotFoundException } from '@nestjs/common';
 import { Device, DeviceStatus, DeviceType } from '@prisma/client';
 
@@ -29,6 +30,13 @@ describe('MqttRouterService', () => {
     smartCurtainService = { updateState: jest.fn() };
     exhaustFanService = { updateState: jest.fn() };
 
+    const eventsGateway = {
+      emitTelemetry: jest.fn(),
+      emitDeviceState: jest.fn(),
+      emitDeviceStatus: jest.fn(),
+      emitCommandExecuted: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MqttRouterService,
@@ -38,6 +46,7 @@ describe('MqttRouterService', () => {
         { provide: SmartDoorService, useValue: smartDoorService },
         { provide: SmartCurtainService, useValue: smartCurtainService },
         { provide: ExhaustFanService, useValue: exhaustFanService },
+        { provide: EventsGateway, useValue: eventsGateway },
       ],
     }).compile();
 

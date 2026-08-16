@@ -1,6 +1,8 @@
 import { forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { DevicesService } from '../devices/devices.service';
+import { EventsGateway } from '../websocket/events.gateway';
+import { AutomationService } from '../automation/automation.service';
 import { GetReadingsQueryDto } from './dto/get-readings-query.dto';
 import { Device, Prisma, Sensor, SensorReading } from '@prisma/client';
 
@@ -35,6 +37,9 @@ export class CustomSensorsService {
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => DevicesService))
     private readonly devicesService: DevicesService,
+    @Inject(forwardRef(() => AutomationService))
+    private readonly automationService: AutomationService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   async getSensorsByDeviceId(deviceId: number): Promise<Sensor[]> {
@@ -145,14 +150,36 @@ export class CustomSensorsService {
           );
         }
 
-        // Save reading
+        const now = new Date();
+
+        // 1. Save reading in DB
         await this.prisma.sensorReading.create({
           data: {
             sensorId: sensor.id,
             value,
-            recordedAt: new Date(),
+            recordedAt: now,
           },
         });
+
+        // 2. Emit real-time WebSocket telemetry event
+        this.eventsGateway.emitTelemetry({
+          deviceUid: device.deviceUid,
+          sensor: sensor.type,
+          value,
+          unit: sensor.unit,
+          recordedAt: now,
+        });
+
+        // 3. Evaluate automation rules for this sensor value
+        const homeId = (device as Device & { room?: { homeId?: number } }).room?.homeId;
+        if (homeId) {
+          this.automationService
+            .evaluateSensorRules(homeId, sensor.type, value)
+            .catch((err: unknown) => {
+              const msg = err instanceof Error ? err.message : String(err);
+              this.logger.error(`Error in automation evaluation: ${msg}`);
+            });
+        }
 
         this.logger.debug?.(
           `Stored reading for device ${device.deviceUid} [${sensor.type}]: ${value} ${sensor.unit}`,

@@ -12,6 +12,8 @@ import { SmartDoorModule } from './smart-door/smart-door.module';
 import { SmartCurtainModule } from './smart-curtain/smart-curtain.module';
 import { ExhaustFanModule } from './exhaust-fan/exhaust-fan.module';
 import { MqttModule } from './mqtt/mqtt.module';
+import { WebsocketModule } from './websocket/websocket.module';
+import { AutomationModule } from './automation/automation.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { MqttModule } from './mqtt/mqtt.module';
     SmartCurtainModule,
     ExhaustFanModule,
     MqttModule,
+    WebsocketModule,
+    AutomationModule,
     HealthModule,
   ],
 })

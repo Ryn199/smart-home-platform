@@ -237,6 +237,46 @@ describe('Devices (e2e)', () => {
     expect(body).toHaveProperty('thresholdSeconds');
   });
 
+  it('POST /api/devices/:id/commands should execute command and publish MQTT', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/devices/${deviceId}/commands`,
+      headers: { authorization: `Bearer ${jwtToken}` },
+      payload: { action: 'unlock' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.payload);
+    expect(body.deviceId).toBe(deviceId);
+    expect(body.command).toBe('unlock');
+    expect(body.status).toBe('SENT');
+  });
+
+  it('POST /api/devices/:id/commands with invalid action should return 400', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/devices/${deviceId}/commands`,
+      headers: { authorization: `Bearer ${jwtToken}` },
+      payload: { action: 'invalid_door_action' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('GET /api/devices/:id/commands should return command history', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/devices/${deviceId}/commands`,
+      headers: { authorization: `Bearer ${jwtToken}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBeGreaterThanOrEqual(1);
+    expect(body[0].command).toBe('unlock');
+  });
+
   it('DELETE /api/devices/:id should delete device', async () => {
     const res = await app.inject({
       method: 'DELETE',
