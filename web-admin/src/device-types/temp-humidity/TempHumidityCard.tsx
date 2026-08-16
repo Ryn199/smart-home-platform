@@ -9,15 +9,12 @@ interface TempHumidityCardProps {
 export const TempHumidityCard: React.FC<TempHumidityCardProps> = ({ device }) => {
   const { deviceStates } = useWebSocket();
 
-  // Read state from live WebSocket or device metadata
-  const liveState = (deviceStates[device.deviceUid] ||
-    device.metadata || {
-      temperature: 0,
-      humidity: 0,
-    }) as unknown as TempHumidityState;
+  // Read state from live WebSocket or device metadata (NO dummy fallback)
+  const rawState = (deviceStates[device.deviceUid] || device.metadata || {}) as Record<string, unknown>;
+  const liveState = rawState as unknown as TempHumidityState;
 
-  const temp = liveState.temperature !== undefined ? liveState.temperature : '-';
-  const hum = liveState.humidity !== undefined ? liveState.humidity : '-';
+  const temp = typeof liveState.temperature === 'number' ? `${liveState.temperature}` : '--';
+  const hum = typeof liveState.humidity === 'number' ? `${liveState.humidity}` : '--';
 
   return (
     <div className="bg-surface border border-outline-variant rounded-xl p-lg space-y-md flex flex-col justify-between group hover:border-outline transition-colors shadow-sm shadow-black/5">
@@ -69,7 +66,7 @@ export const TempHumidityCard: React.FC<TempHumidityCardProps> = ({ device }) =>
           </div>
           <div className="font-display-stat text-display-stat text-on-surface mt-2 flex items-baseline gap-0.5">
             <span>{temp}</span>
-            <span className="text-sm font-semibold text-outline">°C</span>
+            {temp !== '--' && <span className="text-sm font-semibold text-outline">°C</span>}
           </div>
         </div>
 
@@ -85,7 +82,7 @@ export const TempHumidityCard: React.FC<TempHumidityCardProps> = ({ device }) =>
           </div>
           <div className="font-display-stat text-display-stat text-on-surface mt-2 flex items-baseline gap-0.5">
             <span>{hum}</span>
-            <span className="text-sm font-semibold text-outline">%</span>
+            {hum !== '--' && <span className="text-sm font-semibold text-outline">%</span>}
           </div>
         </div>
       </div>

@@ -55,7 +55,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
 
   const device = devices.find((d) => d.deviceUid === deviceUid);
 
-  // 2. Fetch historical database telemetry readings
+  // 2. Fetch historical database telemetry readings (NO dummy fallback)
   const { data: dbHistory = [], isLoading: isLoadingHistory } = useQuery({
     queryKey: ['tempHumidityHistory', deviceUid, timeframe],
     queryFn: () => (deviceUid ? tempHumidityApi.getHistory(deviceUid, timeframe, 200) : []),
@@ -72,7 +72,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
 
   // 4. Initialize telemetry history when database records load
   useEffect(() => {
-    if (dbHistory.length > 0) {
+    if (dbHistory && dbHistory.length > 0) {
       const mapped: TelemetryPoint[] = dbHistory.map((item: TempHumidityReading) => {
         const d = new Date(item.recordedAt);
         return {
@@ -88,15 +88,19 @@ export const TempHumidityMonitoringPage: React.FC = () => {
         };
       });
       setTelemetryHistory(mapped);
+    } else {
+      setTelemetryHistory([]);
     }
   }, [dbHistory]);
 
-  // 5. Read live metadata from WebSocket or database
-  const liveState = (
+  // 5. Read live metadata from WebSocket or device database (NO dummy values)
+  const rawState = (
     deviceUid && deviceStates[deviceUid]
       ? deviceStates[deviceUid]
-      : device?.metadata || { temperature: 26.5, humidity: 55 }
-  ) as unknown as TempHumidityState;
+      : device?.metadata || {}
+  ) as Record<string, unknown>;
+
+  const liveState = rawState as unknown as TempHumidityState;
 
   const currentTemp = typeof liveState.temperature === 'number' ? liveState.temperature : null;
   const currentHum = typeof liveState.humidity === 'number' ? liveState.humidity : null;
@@ -112,7 +116,6 @@ export const TempHumidityMonitoringPage: React.FC = () => {
       });
 
       setTelemetryHistory((prev) => {
-        // If empty and no DB records loaded yet, start initial array
         if (prev.length === 0) {
           return [
             {
@@ -150,46 +153,71 @@ export const TempHumidityMonitoringPage: React.FC = () => {
     }
   }, [currentTemp, currentHum]);
 
-  // Comfort Index Calculation
+  // Comfort Index Calculation (Shows 'Belum Ada Data' if no data)
   const comfortInfo = useMemo(() => {
     if (currentTemp === null || currentHum === null) {
-      return { status: 'Unknown', color: 'text-outline', bg: 'bg-surface-container-highest', desc: 'No data' };
+      return {
+        status: 'Belum Ada Data',
+        color: 'text-outline',
+        bg: 'bg-surface-container-highest',
+        desc: 'Menunggu transmisi telemetri dari sensor MQTT...',
+      };
     }
 
     if (currentTemp >= 20 && currentTemp <= 26 && currentHum >= 40 && currentHum <= 60) {
-      return { status: 'Optimal Comfort', color: 'text-[#059669]', bg: 'bg-[#ecfdf5]', desc: 'Ideal temperature and humidity balance' };
+      return {
+        status: 'Optimal Comfort',
+        color: 'text-[#059669]',
+        bg: 'bg-[#ecfdf5]',
+        desc: 'Suhu dan kelembaban dalam rentang ideal',
+      };
     }
     if (currentTemp > 28 || currentHum > 70) {
-      return { status: 'Warm & Humid', color: 'text-amber-600', bg: 'bg-amber-50', desc: 'Exhaust fan recommended' };
+      return {
+        status: 'Hangat & Lembab',
+        color: 'text-amber-600',
+        bg: 'bg-amber-50',
+        desc: 'Disarankan menyalakan exhaust fan',
+      };
     }
     if (currentTemp < 20) {
-      return { status: 'Cool Environment', color: 'text-blue-600', bg: 'bg-blue-50', desc: 'Lower temperature range' };
+      return {
+        status: 'Lingkungan Sejuk / Dingin',
+        color: 'text-blue-600',
+        bg: 'bg-blue-50',
+        desc: 'Suhu berada di batas bawah',
+      };
     }
-    return { status: 'Moderate', color: 'text-primary', bg: 'bg-primary-container/20', desc: 'Normal ambient conditions' };
+    return {
+      status: 'Moderate',
+      color: 'text-primary',
+      bg: 'bg-primary-container/20',
+      desc: 'Kondisi ruangan normal',
+    };
   }, [currentTemp, currentHum]);
 
-  // Combined Stats: Database aggregate or session calculation
+  // Combined Stats: Database aggregate or session calculation (NO dummy fallback)
   const stats = useMemo(() => {
     if (dbStats?.stats && dbStats.stats.totalReadings > 0) {
       return {
-        tempMin: dbStats.stats.tempMin !== null ? dbStats.stats.tempMin.toFixed(1) : '--',
-        tempMax: dbStats.stats.tempMax !== null ? dbStats.stats.tempMax.toFixed(1) : '--',
-        tempAvg: dbStats.stats.tempAvg !== null ? dbStats.stats.tempAvg.toFixed(1) : '--',
-        humMin: dbStats.stats.humMin !== null ? dbStats.stats.humMin.toFixed(1) : '--',
-        humMax: dbStats.stats.humMax !== null ? dbStats.stats.humMax.toFixed(1) : '--',
-        humAvg: dbStats.stats.humAvg !== null ? dbStats.stats.humAvg.toFixed(1) : '--',
+        tempMin: dbStats.stats.tempMin !== null ? `${dbStats.stats.tempMin.toFixed(1)}°C` : '--',
+        tempMax: dbStats.stats.tempMax !== null ? `${dbStats.stats.tempMax.toFixed(1)}°C` : '--',
+        tempAvg: dbStats.stats.tempAvg !== null ? `${dbStats.stats.tempAvg.toFixed(1)}°C` : '--',
+        humMin: dbStats.stats.humMin !== null ? `${dbStats.stats.humMin.toFixed(1)}%` : '--',
+        humMax: dbStats.stats.humMax !== null ? `${dbStats.stats.humMax.toFixed(1)}%` : '--',
+        humAvg: dbStats.stats.humAvg !== null ? `${dbStats.stats.humAvg.toFixed(1)}%` : '--',
         totalCount: dbStats.stats.totalReadings,
       };
     }
 
     if (telemetryHistory.length === 0) {
       return {
-        tempMin: currentTemp !== null ? currentTemp.toFixed(1) : '--',
-        tempMax: currentTemp !== null ? currentTemp.toFixed(1) : '--',
-        tempAvg: currentTemp !== null ? currentTemp.toFixed(1) : '--',
-        humMin: currentHum !== null ? currentHum.toFixed(1) : '--',
-        humMax: currentHum !== null ? currentHum.toFixed(1) : '--',
-        humAvg: currentHum !== null ? currentHum.toFixed(1) : '--',
+        tempMin: '--',
+        tempMax: '--',
+        tempAvg: '--',
+        humMin: '--',
+        humMax: '--',
+        humAvg: '--',
         totalCount: 0,
       };
     }
@@ -198,15 +226,15 @@ export const TempHumidityMonitoringPage: React.FC = () => {
     const hums = telemetryHistory.map((p) => p.humidity);
 
     return {
-      tempMin: Math.min(...temps).toFixed(1),
-      tempMax: Math.max(...temps).toFixed(1),
-      tempAvg: (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1),
-      humMin: Math.min(...hums).toFixed(1),
-      humMax: Math.max(...hums).toFixed(1),
-      humAvg: (hums.reduce((a, b) => a + b, 0) / hums.length).toFixed(1),
+      tempMin: `${Math.min(...temps).toFixed(1)}°C`,
+      tempMax: `${Math.max(...temps).toFixed(1)}°C`,
+      tempAvg: `${(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)}°C`,
+      humMin: `${Math.min(...hums).toFixed(1)}%`,
+      humMax: `${Math.max(...hums).toFixed(1)}%`,
+      humAvg: `${(hums.reduce((a, b) => a + b, 0) / hums.length).toFixed(1)}%`,
       totalCount: telemetryHistory.length,
     };
-  }, [dbStats, telemetryHistory, currentTemp, currentHum]);
+  }, [dbStats, telemetryHistory]);
 
   // Chart configuration
   const chartData = {
@@ -313,16 +341,16 @@ export const TempHumidityMonitoringPage: React.FC = () => {
       <div className="p-xl bg-surface border border-outline-variant rounded-xl text-center space-y-md">
         <span className="material-symbols-outlined text-4xl text-error">error</span>
         <h3 className="font-headline-md text-headline-md text-on-surface font-bold">
-          Device Not Found
+          Perangkat Tidak Ditemukan
         </h3>
         <p className="text-sm text-on-surface-variant">
-          No device with UID &ldquo;{deviceUid}&rdquo; is registered in your system.
+          Tidak ada perangkat dengan UID &ldquo;{deviceUid}&rdquo; yang terdaftar di sistem.
         </p>
         <button
           onClick={() => navigate('/monitoring')}
           className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-semibold cursor-pointer"
         >
-          Back to Device Monitoring
+          Kembali ke Device Monitoring
         </button>
       </div>
     );
@@ -433,12 +461,12 @@ export const TempHumidityMonitoringPage: React.FC = () => {
             <span className="font-display-stat text-display-stat text-on-surface font-extrabold">
               {currentTemp !== null ? currentTemp : '--'}
             </span>
-            <span className="text-lg font-bold text-outline">°C</span>
+            {currentTemp !== null && <span className="text-lg font-bold text-outline">°C</span>}
           </div>
           <div className="pt-2 border-t border-outline-variant/60 flex justify-between text-xs text-outline font-data-mono">
-            <span>Min: {stats.tempMin}°C</span>
-            <span>Avg: {stats.tempAvg}°C</span>
-            <span>Max: {stats.tempMax}°C</span>
+            <span>Min: {stats.tempMin}</span>
+            <span>Avg: {stats.tempAvg}</span>
+            <span>Max: {stats.tempMax}</span>
           </div>
         </div>
 
@@ -452,12 +480,12 @@ export const TempHumidityMonitoringPage: React.FC = () => {
             <span className="font-display-stat text-display-stat text-on-surface font-extrabold">
               {currentHum !== null ? currentHum : '--'}
             </span>
-            <span className="text-lg font-bold text-outline">%</span>
+            {currentHum !== null && <span className="text-lg font-bold text-outline">%</span>}
           </div>
           <div className="pt-2 border-t border-outline-variant/60 flex justify-between text-xs text-outline font-data-mono">
-            <span>Min: {stats.humMin}%</span>
-            <span>Avg: {stats.humAvg}%</span>
-            <span>Max: {stats.humMax}%</span>
+            <span>Min: {stats.humMin}</span>
+            <span>Avg: {stats.humAvg}</span>
+            <span>Max: {stats.humMax}</span>
           </div>
         </div>
 
@@ -473,10 +501,12 @@ export const TempHumidityMonitoringPage: React.FC = () => {
                 ? (currentTemp - (100 - currentHum) / 5).toFixed(1)
                 : '--'}
             </span>
-            <span className="text-lg font-bold text-outline">°C</span>
+            {currentTemp !== null && currentHum !== null && (
+              <span className="text-lg font-bold text-outline">°C</span>
+            )}
           </div>
           <div className="pt-2 border-t border-outline-variant/60 text-xs text-outline">
-            Condensation threshold index
+            Titik embun kondensasi
           </div>
         </div>
 
@@ -488,15 +518,15 @@ export const TempHumidityMonitoringPage: React.FC = () => {
           </div>
           <div className="my-3 space-y-1">
             <div className="text-sm font-bold text-on-surface flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#10b981] animate-ping" />
-              <span>PostgreSQL &amp; WebSocket</span>
+              <span className={`w-2 h-2 rounded-full ${stats.totalCount > 0 ? 'bg-[#10b981] animate-ping' : 'bg-outline'}`} />
+              <span>{stats.totalCount > 0 ? 'PostgreSQL & WebSocket' : 'Belum Ada Transmisi'}</span>
             </div>
             <div className="text-xs text-outline font-data-mono">
-              Total Records: {stats.totalCount} points
+              Total Data: {stats.totalCount} points
             </div>
           </div>
           <div className="pt-2 border-t border-outline-variant/60 text-xs text-outline">
-            Updated {liveState.lastUpdated ? new Date(liveState.lastUpdated).toLocaleTimeString() : 'Just now'}
+            {liveState.lastUpdated ? `Update: ${new Date(String(liveState.lastUpdated)).toLocaleTimeString()}` : 'Belum pernah update'}
           </div>
         </div>
       </div>
@@ -514,7 +544,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
               )}
             </h3>
             <p className="text-xs text-on-surface-variant">
-              Historical database records combined with live zero-latency WebSocket stream.
+              Data riwayat dari PostgreSQL database &amp; stream live WebSocket (MQTT).
             </p>
           </div>
 
@@ -536,11 +566,15 @@ export const TempHumidityMonitoringPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Chart Canvas */}
+        {/* Chart Canvas or Empty State */}
         <div className="h-[320px] w-full pt-2">
           {telemetryHistory.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-outline text-sm">
-              Waiting for telemetry data from MQTT / Database...
+            <div className="h-full flex flex-col items-center justify-center gap-2 bg-surface-container-low/40 rounded-xl border border-dashed border-outline-variant/60 p-6 text-center">
+              <span className="material-symbols-outlined text-4xl text-outline/60">sensors_off</span>
+              <span className="text-sm font-bold text-on-surface">Belum Ada Data Telemetri</span>
+              <p className="text-xs text-outline max-w-md">
+                Data grafik akan otomatis muncul begitu sensor DHT22/node mengirimkan pembacaan suhu &amp; kelembaban via MQTT broker.
+              </p>
             </div>
           ) : (
             <Line data={chartData} options={chartOptions} />
@@ -555,7 +589,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
             Historical Telemetry Logs ({timeframe.toUpperCase()})
           </h4>
           <span className="text-xs text-outline font-data-mono">
-            {telemetryHistory.length} readings loaded
+            {telemetryHistory.length} data tercatat
           </span>
         </div>
 
@@ -571,30 +605,38 @@ export const TempHumidityMonitoringPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/60">
-              {telemetryHistory
-                .slice()
-                .reverse()
-                .map((point, idx) => (
-                  <tr key={idx} className="hover:bg-surface-container-low/40">
-                    <td className="px-lg py-2 font-data-mono text-xs text-outline">
-                      {point.timeLabel}
-                    </td>
-                    <td className="px-lg py-2 font-semibold text-[#0284c7]">
-                      {point.temperature}°C
-                    </td>
-                    <td className="px-lg py-2 font-semibold text-[#10b981]">
-                      {point.humidity}%
-                    </td>
-                    <td className="px-lg py-2 text-on-surface-variant text-xs font-data-mono">
-                      {(point.temperature - (100 - point.humidity) / 5).toFixed(1)}°C
-                    </td>
-                    <td className="px-lg py-2 text-right">
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#ecfdf5] text-[#059669]">
-                        {point.id ? 'POSTGRES_DB' : 'LIVE_MQTT'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+              {telemetryHistory.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-lg py-8 text-center text-outline text-xs">
+                    Belum ada riwayat data telemetri yang tercatat di database untuk perangkat ini.
+                  </td>
+                </tr>
+              ) : (
+                telemetryHistory
+                  .slice()
+                  .reverse()
+                  .map((point, idx) => (
+                    <tr key={idx} className="hover:bg-surface-container-low/40">
+                      <td className="px-lg py-2 font-data-mono text-xs text-outline">
+                        {point.timeLabel}
+                      </td>
+                      <td className="px-lg py-2 font-semibold text-[#0284c7]">
+                        {point.temperature}°C
+                      </td>
+                      <td className="px-lg py-2 font-semibold text-[#10b981]">
+                        {point.humidity}%
+                      </td>
+                      <td className="px-lg py-2 text-on-surface-variant text-xs font-data-mono">
+                        {(point.temperature - (100 - point.humidity) / 5).toFixed(1)}°C
+                      </td>
+                      <td className="px-lg py-2 text-right">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#ecfdf5] text-[#059669]">
+                          {point.id ? 'POSTGRES_DB' : 'LIVE_MQTT'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+              )}
             </tbody>
           </table>
         </div>
