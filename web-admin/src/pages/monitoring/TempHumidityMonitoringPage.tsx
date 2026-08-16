@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { devicesApi } from '../../api/devices';
+import { tempHumidityApi, TempHumidityReading } from '../../api/tempHumidity';
 import { useWebSocket } from '../../websocket/socket';
 import { usePinnedDevices } from '../../hooks/usePinnedDevices';
 import { TempHumidityState } from '../../types';
@@ -30,6 +31,7 @@ ChartJS.register(
 );
 
 interface TelemetryPoint {
+  id?: number;
   timestamp: string;
   timeLabel: string;
   temperature: number;
@@ -42,18 +44,54 @@ export const TempHumidityMonitoringPage: React.FC = () => {
   const { deviceStates } = useWebSocket();
   const { isPinned, togglePin } = usePinnedDevices();
 
-  const [timeframe, setTimeframe] = useState<'realtime' | '1h' | '24h' | '7d'>('realtime');
+  const [timeframe, setTimeframe] = useState<'1h' | '24h' | '7d' | 'all'>('1h');
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryPoint[]>([]);
 
   // 1. Fetch devices list to resolve this device
-  const { data: devices = [], isLoading } = useQuery({
+  const { data: devices = [], isLoading: isLoadingDevice } = useQuery({
     queryKey: ['devices'],
     queryFn: () => devicesApi.getAll(),
   });
 
   const device = devices.find((d) => d.deviceUid === deviceUid);
 
-  // 2. Read live metadata from WebSocket or database
+  // 2. Fetch historical database telemetry readings
+  const { data: dbHistory = [], isLoading: isLoadingHistory } = useQuery({
+    queryKey: ['tempHumidityHistory', deviceUid, timeframe],
+    queryFn: () => (deviceUid ? tempHumidityApi.getHistory(deviceUid, timeframe, 200) : []),
+    enabled: !!deviceUid,
+  });
+
+  // 3. Fetch 24h aggregated statistics from database
+  const { data: dbStats } = useQuery({
+    queryKey: ['tempHumidityStats', deviceUid],
+    queryFn: () => (deviceUid ? tempHumidityApi.getStats(deviceUid) : null),
+    enabled: !!deviceUid,
+    refetchInterval: 10000,
+  });
+
+  // 4. Initialize telemetry history when database records load
+  useEffect(() => {
+    if (dbHistory.length > 0) {
+      const mapped: TelemetryPoint[] = dbHistory.map((item: TempHumidityReading) => {
+        const d = new Date(item.recordedAt);
+        return {
+          id: item.id,
+          timestamp: item.recordedAt,
+          timeLabel: d.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          }),
+          temperature: item.temperature,
+          humidity: item.humidity,
+        };
+      });
+      setTelemetryHistory(mapped);
+    }
+  }, [dbHistory]);
+
+  // 5. Read live metadata from WebSocket or database
   const liveState = (
     deviceUid && deviceStates[deviceUid]
       ? deviceStates[deviceUid]
@@ -63,37 +101,37 @@ export const TempHumidityMonitoringPage: React.FC = () => {
   const currentTemp = typeof liveState.temperature === 'number' ? liveState.temperature : null;
   const currentHum = typeof liveState.humidity === 'number' ? liveState.humidity : null;
 
-  // 3. Initialize / Seed history if empty, and listen to updates
+  // 6. Append incoming WebSocket telemetry to the live chart in real time
   useEffect(() => {
     if (currentTemp !== null && currentHum !== null) {
       const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const timeStr = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
 
       setTelemetryHistory((prev) => {
-        // If empty, generate simulated recent points for realistic initial chart
+        // If empty and no DB records loaded yet, start initial array
         if (prev.length === 0) {
-          const initialPoints: TelemetryPoint[] = [];
-          for (let i = 10; i >= 1; i--) {
-            const pastTime = new Date(now.getTime() - i * 5000);
-            initialPoints.push({
-              timestamp: pastTime.toISOString(),
-              timeLabel: pastTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-              temperature: parseFloat((currentTemp + (Math.random() * 0.8 - 0.4)).toFixed(1)),
-              humidity: parseFloat((currentHum + (Math.random() * 1.5 - 0.75)).toFixed(1)),
-            });
-          }
-          initialPoints.push({
-            timestamp: now.toISOString(),
-            timeLabel: timeStr,
-            temperature: currentTemp,
-            humidity: currentHum,
-          });
-          return initialPoints;
+          return [
+            {
+              timestamp: now.toISOString(),
+              timeLabel: timeStr,
+              temperature: currentTemp,
+              humidity: currentHum,
+            },
+          ];
         }
 
-        // Avoid adding exact duplicate timestamps
         const last = prev[prev.length - 1];
-        if (last && last.temperature === currentTemp && last.humidity === currentHum) {
+        // Don't add duplicate reading if values & minute match
+        if (
+          last &&
+          last.temperature === currentTemp &&
+          last.humidity === currentHum &&
+          last.timeLabel === timeStr
+        ) {
           return prev;
         }
 
@@ -106,8 +144,8 @@ export const TempHumidityMonitoringPage: React.FC = () => {
             humidity: currentHum,
           },
         ];
-        // Keep last 30 data points for smooth performance
-        return next.slice(-30);
+        // Keep at most 200 points for smooth rendering
+        return next.slice(-200);
       });
     }
   }, [currentTemp, currentHum]);
@@ -130,32 +168,45 @@ export const TempHumidityMonitoringPage: React.FC = () => {
     return { status: 'Moderate', color: 'text-primary', bg: 'bg-primary-container/20', desc: 'Normal ambient conditions' };
   }, [currentTemp, currentHum]);
 
-  // Statistics: Min / Max / Average
+  // Combined Stats: Database aggregate or session calculation
   const stats = useMemo(() => {
+    if (dbStats?.stats && dbStats.stats.totalReadings > 0) {
+      return {
+        tempMin: dbStats.stats.tempMin !== null ? dbStats.stats.tempMin.toFixed(1) : '--',
+        tempMax: dbStats.stats.tempMax !== null ? dbStats.stats.tempMax.toFixed(1) : '--',
+        tempAvg: dbStats.stats.tempAvg !== null ? dbStats.stats.tempAvg.toFixed(1) : '--',
+        humMin: dbStats.stats.humMin !== null ? dbStats.stats.humMin.toFixed(1) : '--',
+        humMax: dbStats.stats.humMax !== null ? dbStats.stats.humMax.toFixed(1) : '--',
+        humAvg: dbStats.stats.humAvg !== null ? dbStats.stats.humAvg.toFixed(1) : '--',
+        totalCount: dbStats.stats.totalReadings,
+      };
+    }
+
     if (telemetryHistory.length === 0) {
       return {
-        tempMin: currentTemp ?? '--',
-        tempMax: currentTemp ?? '--',
-        tempAvg: currentTemp ?? '--',
-        humMin: currentHum ?? '--',
-        humMax: currentHum ?? '--',
-        humAvg: currentHum ?? '--',
+        tempMin: currentTemp !== null ? currentTemp.toFixed(1) : '--',
+        tempMax: currentTemp !== null ? currentTemp.toFixed(1) : '--',
+        tempAvg: currentTemp !== null ? currentTemp.toFixed(1) : '--',
+        humMin: currentHum !== null ? currentHum.toFixed(1) : '--',
+        humMax: currentHum !== null ? currentHum.toFixed(1) : '--',
+        humAvg: currentHum !== null ? currentHum.toFixed(1) : '--',
+        totalCount: 0,
       };
     }
 
     const temps = telemetryHistory.map((p) => p.temperature);
     const hums = telemetryHistory.map((p) => p.humidity);
 
-    const tempMin = Math.min(...temps).toFixed(1);
-    const tempMax = Math.max(...temps).toFixed(1);
-    const tempAvg = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
-
-    const humMin = Math.min(...hums).toFixed(1);
-    const humMax = Math.max(...hums).toFixed(1);
-    const humAvg = (hums.reduce((a, b) => a + b, 0) / hums.length).toFixed(1);
-
-    return { tempMin, tempMax, tempAvg, humMin, humMax, humAvg };
-  }, [telemetryHistory, currentTemp, currentHum]);
+    return {
+      tempMin: Math.min(...temps).toFixed(1),
+      tempMax: Math.max(...temps).toFixed(1),
+      tempAvg: (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1),
+      humMin: Math.min(...hums).toFixed(1),
+      humMax: Math.max(...hums).toFixed(1),
+      humAvg: (hums.reduce((a, b) => a + b, 0) / hums.length).toFixed(1),
+      totalCount: telemetryHistory.length,
+    };
+  }, [dbStats, telemetryHistory, currentTemp, currentHum]);
 
   // Chart configuration
   const chartData = {
@@ -169,7 +220,8 @@ export const TempHumidityMonitoringPage: React.FC = () => {
         borderWidth: 2.5,
         tension: 0.35,
         fill: true,
-        pointRadius: 3,
+        pointRadius: telemetryHistory.length > 50 ? 0 : 3,
+        pointHoverRadius: 5,
         pointBackgroundColor: '#0284c7',
         yAxisID: 'yTemp',
       },
@@ -181,7 +233,8 @@ export const TempHumidityMonitoringPage: React.FC = () => {
         borderWidth: 2.5,
         tension: 0.35,
         fill: true,
-        pointRadius: 3,
+        pointRadius: telemetryHistory.length > 50 ? 0 : 3,
+        pointHoverRadius: 5,
         pointBackgroundColor: '#10b981',
         yAxisID: 'yHum',
       },
@@ -191,6 +244,9 @@ export const TempHumidityMonitoringPage: React.FC = () => {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: {
+      duration: 300,
+    },
     interaction: {
       mode: 'index' as const,
       intersect: false,
@@ -244,7 +300,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
     },
   };
 
-  if (isLoading) {
+  if (isLoadingDevice) {
     return (
       <div className="p-xl text-center text-outline">
         Loading temperature & humidity monitoring node...
@@ -252,7 +308,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
     );
   }
 
-  if (!device && !isLoading) {
+  if (!device && !isLoadingDevice) {
     return (
       <div className="p-xl bg-surface border border-outline-variant rounded-xl text-center space-y-md">
         <span className="material-symbols-outlined text-4xl text-error">error</span>
@@ -379,7 +435,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
             </span>
             <span className="text-lg font-bold text-outline">°C</span>
           </div>
-          <div className="pt-2 border-t border-outline-variant/60 flex justify-between text-xs text-outline">
+          <div className="pt-2 border-t border-outline-variant/60 flex justify-between text-xs text-outline font-data-mono">
             <span>Min: {stats.tempMin}°C</span>
             <span>Avg: {stats.tempAvg}°C</span>
             <span>Max: {stats.tempMax}°C</span>
@@ -398,7 +454,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
             </span>
             <span className="text-lg font-bold text-outline">%</span>
           </div>
-          <div className="pt-2 border-t border-outline-variant/60 flex justify-between text-xs text-outline">
+          <div className="pt-2 border-t border-outline-variant/60 flex justify-between text-xs text-outline font-data-mono">
             <span>Min: {stats.humMin}%</span>
             <span>Avg: {stats.humAvg}%</span>
             <span>Max: {stats.humMax}%</span>
@@ -424,19 +480,19 @@ export const TempHumidityMonitoringPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Connection & Telemetry Status */}
+        {/* Database & Telemetry Health */}
         <div className="bg-surface border border-outline-variant rounded-xl p-lg flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between text-on-surface-variant">
-            <span className="font-label-caps text-label-caps uppercase">Node Telemetry</span>
-            <span className="material-symbols-outlined text-primary text-[20px]">sensors</span>
+            <span className="font-label-caps text-label-caps uppercase">Telemetry Storage</span>
+            <span className="material-symbols-outlined text-primary text-[20px]">database</span>
           </div>
           <div className="my-3 space-y-1">
             <div className="text-sm font-bold text-on-surface flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#10b981] animate-ping" />
-              <span>Realtime Live Stream</span>
+              <span>PostgreSQL &amp; WebSocket</span>
             </div>
             <div className="text-xs text-outline font-data-mono">
-              Protocol: MQTT &amp; WebSocket
+              Total Records: {stats.totalCount} points
             </div>
           </div>
           <div className="pt-2 border-t border-outline-variant/60 text-xs text-outline">
@@ -449,17 +505,22 @@ export const TempHumidityMonitoringPage: React.FC = () => {
       <div className="bg-surface border border-outline-variant rounded-xl p-lg space-y-md shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-md border-b border-outline-variant pb-md">
           <div>
-            <h3 className="font-headline-md text-headline-md text-on-surface font-bold">
-              Environmental Telemetry Trends
+            <h3 className="font-headline-md text-headline-md text-on-surface font-bold flex items-center gap-2">
+              <span>Environmental Telemetry Trends</span>
+              {isLoadingHistory && (
+                <span className="material-symbols-outlined text-primary text-sm animate-spin">
+                  progress_activity
+                </span>
+              )}
             </h3>
             <p className="text-xs text-on-surface-variant">
-              Live continuous telemetry readings synchronized with MQTT topic <code className="font-data-mono text-primary">home/.../state</code>
+              Historical database records combined with live zero-latency WebSocket stream.
             </p>
           </div>
 
           {/* Timeframe selector */}
           <div className="flex items-center p-1 bg-surface-container-low border border-outline-variant rounded-lg text-xs font-semibold">
-            {(['realtime', '1h', '24h', '7d'] as const).map((tf) => (
+            {(['1h', '24h', '7d', 'all'] as const).map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
@@ -477,18 +538,24 @@ export const TempHumidityMonitoringPage: React.FC = () => {
 
         {/* Chart Canvas */}
         <div className="h-[320px] w-full pt-2">
-          <Line data={chartData} options={chartOptions} />
+          {telemetryHistory.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-outline text-sm">
+              Waiting for telemetry data from MQTT / Database...
+            </div>
+          ) : (
+            <Line data={chartData} options={chartOptions} />
+          )}
         </div>
       </div>
 
-      {/* Live Stream Table */}
+      {/* Telemetry Database & Stream Table */}
       <div className="bg-surface border border-outline-variant rounded-xl overflow-hidden shadow-sm">
         <div className="p-md bg-surface-container-low border-b border-outline-variant flex justify-between items-center">
           <h4 className="font-headline-md text-headline-md text-on-surface font-bold">
-            Recent Telemetry Stream Logs
+            Historical Telemetry Logs ({timeframe.toUpperCase()})
           </h4>
           <span className="text-xs text-outline font-data-mono">
-            {telemetryHistory.length} recorded points
+            {telemetryHistory.length} readings loaded
           </span>
         </div>
 
@@ -500,7 +567,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
                 <th className="px-lg py-2.5">Temperature</th>
                 <th className="px-lg py-2.5">Humidity</th>
                 <th className="px-lg py-2.5">Estimated Dew Point</th>
-                <th className="px-lg py-2.5 text-right">Status</th>
+                <th className="px-lg py-2.5 text-right">Source</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/60">
@@ -523,7 +590,7 @@ export const TempHumidityMonitoringPage: React.FC = () => {
                     </td>
                     <td className="px-lg py-2 text-right">
                       <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#ecfdf5] text-[#059669]">
-                        LIVE_OK
+                        {point.id ? 'POSTGRES_DB' : 'LIVE_MQTT'}
                       </span>
                     </td>
                   </tr>

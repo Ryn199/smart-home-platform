@@ -88,13 +88,33 @@ model Device {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  room     Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  commands DeviceCommand[]
+  room                 Room                  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  commands             DeviceCommand[]
+  tempHumidityReadings TempHumidityReading[]
 
   @@index([roomId])
   @@index([deviceUid])
   @@index([lastSeenAt])
   @@map("devices")
+}
+
+// ============================================================
+// TEMPERATURE & HUMIDITY READINGS (Time-series telemetry table)
+// ============================================================
+
+model TempHumidityReading {
+  id          Int      @id @default(autoincrement())
+  deviceId    Int
+  temperature Float
+  humidity    Float
+  recordedAt  DateTime @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([recordedAt])
+  @@index([deviceId, recordedAt])
+  @@map("temp_humidity_readings")
 }
 
 // ============================================================
