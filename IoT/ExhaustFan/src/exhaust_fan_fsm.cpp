@@ -1,18 +1,8 @@
 #include "exhaust_fan_fsm.h"
 
 ExhaustFanFSM::ExhaustFanFSM()
-  : _pinRelayPower(PIN_RELAY_POWER),
-    _pinRelayDirection(PIN_RELAY_DIRECTION),
-    _pinServo(PIN_SERVO),
-    _pinLimitSwitch(PIN_LIMIT_SWITCH),
-    _servoSubState(SERVO_SUB_IDLE),
-    _servoPullsTarget(0),
-    _servoPullsCompleted(0),
-    _servoStepTimer(0),
-    _desiredPower(false),
+  : _desiredPower(false),
     _desiredDirection(DIR_EXHAUST),
-    _actualPower(false),
-    _actualDirection(DIR_EXHAUST),
     _ductPosition(DUCT_UNKNOWN),
     _operationState(STATE_BOOTING),
     _errorCode(ERR_NONE),
@@ -22,64 +12,22 @@ ExhaustFanFSM::ExhaustFanFSM()
 }
 
 void ExhaustFanFSM::begin() {
-  Serial.println("[FSM] Initializing Smart Exhaust Fan Hardware & FSM (Single Limit Switch)...");
+  Serial.println("[FSM] Initializing Smart Exhaust Fan Hardware Components & FSM...");
 
-  // 1. Configure Relay Outputs (SAFE DEFAULT: BOTH INACTIVE)
-  pinMode(_pinRelayPower, OUTPUT);
-  pinMode(_pinRelayDirection, OUTPUT);
-  setRelayPower(false);
-  setRelayDirection(DIR_EXHAUST);
+  // 1. Initialize Hardware Components
+  _relays.begin();
+  _limitSwitch.begin();
+  _servo.begin();
 
-  // 2. Configure Single Limit Switch with internal Pullup
-  // Pressed = LOW (DUCT_CLOSED), Not Pressed / Open Circuit = HIGH (DUCT_OPEN)
-  pinMode(_pinLimitSwitch, INPUT_PULLUP);
-
-  // 3. Attach Servo & move to initial Rest position
-  #if defined(ESP32)
-    ESP32PWM::allocateTimer(0);
-    ESP32PWM::allocateTimer(1);
-    ESP32PWM::allocateTimer(2);
-    ESP32PWM::allocateTimer(3);
-    _servo.setPeriodHertz(50);
-  #endif
-  _servo.attach(_pinServo);
-  _servo.write(SERVO_REST_ANGLE);
-  delay(100);
-
-  // 4. Initial Hardware Limit Switch Read
-  _ductPosition = readRawLimitSwitch();
+  // 2. Initial Limit Detection
+  _ductPosition = _limitSwitch.readPosition();
   Serial.print("[FSM] Boot Limit Detection: Duct Position is ");
   Serial.println(ductPositionToString(_ductPosition));
 
-  // 5. Initial state: BOOTING
+  // 3. Initial state: BOOTING
   _operationState = STATE_BOOTING;
   _stateTimer = millis();
   _stateChanged = true;
-}
-
-DuctPosition ExhaustFanFSM::readRawLimitSwitch() {
-  int pinVal = digitalRead(_pinLimitSwitch);
-  // Switch Tertekan (LOW) = Duct Tertutup
-  // Switch Terbuka / Tidak ditekan (HIGH) = Duct Dibuka
-  if (pinVal == LIMIT_CLOSED_LEVEL) {
-    return DUCT_CLOSED;
-  } else {
-    return DUCT_OPEN;
-  }
-}
-
-void ExhaustFanFSM::setRelayPower(bool on) {
-  _actualPower = on;
-  digitalWrite(_pinRelayPower, on ? RELAY_ACTIVE_LEVEL : RELAY_INACTIVE_LEVEL);
-  Serial.print("[HARDWARE] Relay Power -> ");
-  Serial.println(on ? "ON" : "OFF");
-}
-
-void ExhaustFanFSM::setRelayDirection(FanDirection dir) {
-  _actualDirection = dir;
-  digitalWrite(_pinRelayDirection, (dir == DIR_INTAKE) ? RELAY_DIR_INTAKE_LEVEL : RELAY_DIR_EXHAUST_LEVEL);
-  Serial.print("[HARDWARE] Relay Direction -> ");
-  Serial.println(directionToString(dir));
 }
 
 void ExhaustFanFSM::setOperationState(FanOperationState newState) {
@@ -97,8 +45,8 @@ void ExhaustFanFSM::setOperationState(FanOperationState newState) {
 
 void ExhaustFanFSM::triggerError(FanErrorCode error) {
   // SAFETY: Instantly shut off power relay & stop servo on error
-  setRelayPower(false);
-  stopServo();
+  _relays.setPower(false);
+  _servo.stop();
 
   _errorCode = error;
   setOperationState(STATE_ERROR);
@@ -139,80 +87,14 @@ bool ExhaustFanFSM::hasStateChanged() {
 }
 
 // ============================================================
-// SERVO SUB-FSM FOR CORD PULLING
-// ============================================================
-void ExhaustFanFSM::startServoPulls(uint8_t targetPulls) {
-  _servoPullsTarget = targetPulls;
-  _servoPullsCompleted = 0;
-  _servoSubState = SERVO_SUB_PULLING;
-  _servoStepTimer = millis();
-
-  if (!_servo.attached()) {
-    _servo.attach(_pinServo);
-  }
-  _servo.write(SERVO_PULL_ANGLE);
-  Serial.print("[SERVO] Starting pull cycle (1 of ");
-  Serial.print(_servoPullsTarget);
-  Serial.println(")...");
-}
-
-void ExhaustFanFSM::stopServo() {
-  _servoSubState = SERVO_SUB_IDLE;
-  if (_servo.attached()) {
-    _servo.write(SERVO_REST_ANGLE);
-  }
-}
-
-void ExhaustFanFSM::updateServoSubFSM() {
-  if (_servoSubState == SERVO_SUB_IDLE) return;
-
-  unsigned long now = millis();
-
-  switch (_servoSubState) {
-    case SERVO_SUB_PULLING:
-      if (now - _servoStepTimer >= SERVO_STROKE_HOLD_MS) {
-        _servo.write(SERVO_REST_ANGLE);
-        _servoSubState = SERVO_SUB_RETURNING;
-        _servoStepTimer = now;
-      }
-      break;
-
-    case SERVO_SUB_RETURNING:
-      if (now - _servoStepTimer >= SERVO_STROKE_PAUSE_MS) {
-        _servoPullsCompleted++;
-        if (_servoPullsCompleted < _servoPullsTarget) {
-          // Trigger next stroke
-          _servo.write(SERVO_PULL_ANGLE);
-          _servoSubState = SERVO_SUB_PULLING;
-          _servoStepTimer = now;
-          Serial.print("[SERVO] Next stroke (");
-          Serial.print(_servoPullsCompleted + 1);
-          Serial.print(" of ");
-          Serial.print(_servoPullsTarget);
-          Serial.println(")...");
-        } else {
-          // Completed all strokes
-          _servoSubState = SERVO_SUB_IDLE;
-          Serial.println("[SERVO] Pull strokes completed.");
-        }
-      }
-      break;
-
-    default:
-      _servoSubState = SERVO_SUB_IDLE;
-      break;
-  }
-}
-
-// ============================================================
 // MAIN STATE MACHINE UPDATE LOOP
 // ============================================================
 void ExhaustFanFSM::update() {
   // 1. Always service non-blocking servo movement
-  updateServoSubFSM();
+  _servo.update();
 
   // 2. Read live Limit Switch
-  DuctPosition rawPos = readRawLimitSwitch();
+  DuctPosition rawPos = _limitSwitch.readPosition();
 
   // Update duct position unless currently in transit
   if (_operationState != STATE_OPENING_DUCT && _operationState != STATE_CLOSING_DUCT) {
@@ -266,16 +148,16 @@ void ExhaustFanFSM::update() {
 
 void ExhaustFanFSM::handleBooting() {
   // Safe boot: Fan power is OFF, Direction is checked, Duct is evaluated
-  setRelayPower(false);
+  _relays.setPower(false);
 
-  DuctPosition pos = readRawLimitSwitch();
+  DuctPosition pos = _limitSwitch.readPosition();
   _ductPosition = pos;
 
   if (millis() - _stateTimer >= 1000) {
     if (_desiredPower) {
       // User wanted power ON: Move towards OPENING_DUCT or STARTING
       if (_ductPosition == DUCT_OPEN) {
-        if (_actualDirection != _desiredDirection) {
+        if (_relays.getDirection() != _desiredDirection) {
           setOperationState(STATE_CHANGING_DIRECTION);
         } else {
           setOperationState(STATE_STARTING_FAN);
@@ -284,7 +166,7 @@ void ExhaustFanFSM::handleBooting() {
         setOperationState(STATE_OPENING_DUCT);
         _ductOperationTimer = millis();
         _ductPosition = DUCT_OPENING;
-        startServoPulls(1); // 1 pull to open
+        _servo.startPulls(1); // 1 pull to open
       }
     } else {
       // Desired power is OFF: Settle in IDLE
@@ -295,16 +177,16 @@ void ExhaustFanFSM::handleBooting() {
 
 void ExhaustFanFSM::handleIdle() {
   // In IDLE: Fan is OFF.
-  if (_actualPower) {
-    setRelayPower(false);
+  if (_relays.isPowerOn()) {
+    _relays.setPower(false);
   }
 
   // Check if user requested ON
   if (_desiredPower) {
-    DuctPosition pos = readRawLimitSwitch();
+    DuctPosition pos = _limitSwitch.readPosition();
     if (pos == DUCT_OPEN) {
       // Duct already open: check direction or start
-      if (_actualDirection != _desiredDirection) {
+      if (_relays.getDirection() != _desiredDirection) {
         setOperationState(STATE_CHANGING_DIRECTION);
       } else {
         setOperationState(STATE_STARTING_FAN);
@@ -314,34 +196,34 @@ void ExhaustFanFSM::handleIdle() {
       setOperationState(STATE_OPENING_DUCT);
       _ductOperationTimer = millis();
       _ductPosition = DUCT_OPENING;
-      startServoPulls(1); // 1 pull cycle to OPEN duct
+      _servo.startPulls(1); // 1 pull cycle to OPEN duct
     }
   } else {
     // If duct is not CLOSED and user wants OFF, close duct
-    DuctPosition pos = readRawLimitSwitch();
+    DuctPosition pos = _limitSwitch.readPosition();
     if (pos == DUCT_OPEN) {
       setOperationState(STATE_CLOSING_DUCT);
       _ductOperationTimer = millis();
       _ductPosition = DUCT_CLOSING;
-      startServoPulls(2); // 2 pull cycles to CLOSE duct
+      _servo.startPulls(2); // 2 pull cycles to CLOSE duct
     }
   }
 }
 
 void ExhaustFanFSM::handleOpeningDuct() {
   // SAFETY: Fan MUST be OFF while duct is opening
-  if (_actualPower) {
-    setRelayPower(false);
+  if (_relays.isPowerOn()) {
+    _relays.setPower(false);
   }
 
-  DuctPosition pos = readRawLimitSwitch();
+  DuctPosition pos = _limitSwitch.readPosition();
   if (pos == DUCT_OPEN) {
     Serial.println("[FSM] Duct OPEN verified (Switch open circuit)!");
     _ductPosition = DUCT_OPEN;
-    stopServo();
+    _servo.stop();
 
     // Check if direction needs changing before start
-    if (_actualDirection != _desiredDirection) {
+    if (_relays.getDirection() != _desiredDirection) {
       setOperationState(STATE_CHANGING_DIRECTION);
     } else {
       setOperationState(STATE_STARTING_FAN);
@@ -356,25 +238,25 @@ void ExhaustFanFSM::handleOpeningDuct() {
   }
 
   // If user changed mind to OFF during opening: abort and close
-  if (!_desiredPower && _servoSubState == SERVO_SUB_IDLE) {
+  if (!_desiredPower && !_servo.isBusy()) {
     setOperationState(STATE_CLOSING_DUCT);
     _ductOperationTimer = millis();
     _ductPosition = DUCT_CLOSING;
-    startServoPulls(2);
+    _servo.startPulls(2);
   }
 }
 
 void ExhaustFanFSM::handleClosingDuct() {
   // SAFETY: Fan MUST be OFF while closing
-  if (_actualPower) {
-    setRelayPower(false);
+  if (_relays.isPowerOn()) {
+    _relays.setPower(false);
   }
 
-  DuctPosition pos = readRawLimitSwitch();
+  DuctPosition pos = _limitSwitch.readPosition();
   if (pos == DUCT_CLOSED) {
     Serial.println("[FSM] Duct CLOSED verified (Switch pressed)!");
     _ductPosition = DUCT_CLOSED;
-    stopServo();
+    _servo.stop();
     setOperationState(STATE_IDLE);
     return;
   }
@@ -386,25 +268,25 @@ void ExhaustFanFSM::handleClosingDuct() {
   }
 
   // If user changed mind to ON during closing: wait until servo idle then reopen
-  if (_desiredPower && _servoSubState == SERVO_SUB_IDLE) {
+  if (_desiredPower && !_servo.isBusy()) {
     setOperationState(STATE_OPENING_DUCT);
     _ductOperationTimer = millis();
     _ductPosition = DUCT_OPENING;
-    startServoPulls(1);
+    _servo.startPulls(1);
   }
 }
 
 void ExhaustFanFSM::handleStoppingFan() {
   // 1. Immediately turn OFF fan power relay
-  setRelayPower(false);
+  _relays.setPower(false);
   // 2. Transition to waiting motor inertia to stop
   setOperationState(STATE_WAITING_MOTOR_STOP);
 }
 
 void ExhaustFanFSM::handleWaitingMotorStop() {
   // SAFETY: Fan MUST remain OFF
-  if (_actualPower) {
-    setRelayPower(false);
+  if (_relays.isPowerOn()) {
+    _relays.setPower(false);
   }
 
   // Wait for MOTOR_STOP_DELAY_MS (e.g. 3000ms) before touching direction relay or closing duct
@@ -416,10 +298,10 @@ void ExhaustFanFSM::handleWaitingMotorStop() {
       setOperationState(STATE_CLOSING_DUCT);
       _ductOperationTimer = millis();
       _ductPosition = DUCT_CLOSING;
-      startServoPulls(2);
+      _servo.startPulls(2);
     } else {
       // User requested direction change while fan was running
-      if (_actualDirection != _desiredDirection) {
+      if (_relays.getDirection() != _desiredDirection) {
         setOperationState(STATE_CHANGING_DIRECTION);
       } else {
         setOperationState(STATE_STARTING_FAN);
@@ -430,14 +312,14 @@ void ExhaustFanFSM::handleWaitingMotorStop() {
 
 void ExhaustFanFSM::handleChangingDirection() {
   // SAFETY INTERLOCK 1: Direction relay MUST NEVER switch when fan is ON
-  if (_actualPower) {
-    setRelayPower(false);
+  if (_relays.isPowerOn()) {
+    _relays.setPower(false);
     setOperationState(STATE_WAITING_MOTOR_STOP);
     return;
   }
 
   // Switch Direction Relay
-  setRelayDirection(_desiredDirection);
+  _relays.setDirection(_desiredDirection);
 
   // Transition to waiting relay settle
   setOperationState(STATE_WAITING_RELAY_SETTLE);
@@ -458,30 +340,30 @@ void ExhaustFanFSM::handleWaitingRelaySettle() {
 
 void ExhaustFanFSM::handleStartingFan() {
   // SAFETY INTERLOCK 2: Fan CANNOT turn ON unless duct is verified OPEN
-  DuctPosition pos = readRawLimitSwitch();
+  DuctPosition pos = _limitSwitch.readPosition();
   if (pos != DUCT_OPEN) {
     Serial.println("[FSM] Safety Warning: Cannot start fan because duct is not OPEN. Re-opening...");
     setOperationState(STATE_OPENING_DUCT);
     _ductOperationTimer = millis();
     _ductPosition = DUCT_OPENING;
-    startServoPulls(1);
+    _servo.startPulls(1);
     return;
   }
 
   // SAFETY INTERLOCK 3: Direction must match target
-  if (_actualDirection != _desiredDirection) {
+  if (_relays.getDirection() != _desiredDirection) {
     setOperationState(STATE_CHANGING_DIRECTION);
     return;
   }
 
   // Turn ON Fan Power Relay
-  setRelayPower(true);
+  _relays.setPower(true);
   setOperationState(STATE_RUNNING);
 }
 
 void ExhaustFanFSM::handleRunning() {
   // 1. Verify Duct remains OPEN during run
-  DuctPosition pos = readRawLimitSwitch();
+  DuctPosition pos = _limitSwitch.readPosition();
   if (pos != DUCT_OPEN) {
     Serial.println("[FSM][SAFETY] Duct is no longer OPEN while running! Stopping fan immediately.");
     setOperationState(STATE_STOPPING_FAN);
@@ -496,7 +378,7 @@ void ExhaustFanFSM::handleRunning() {
   }
 
   // 3. Check if user requested Direction change while running
-  if (_desiredDirection != _actualDirection) {
+  if (_desiredDirection != _relays.getDirection()) {
     Serial.println("[FSM] Direction change requested while fan running. Initiating safe stop sequence...");
     setOperationState(STATE_STOPPING_FAN);
     return;
@@ -505,8 +387,8 @@ void ExhaustFanFSM::handleRunning() {
 
 void ExhaustFanFSM::handleError() {
   // SAFETY: Always enforce fan power OFF in ERROR state
-  if (_actualPower) {
-    setRelayPower(false);
+  if (_relays.isPowerOn()) {
+    _relays.setPower(false);
   }
-  stopServo();
+  _servo.stop();
 }
