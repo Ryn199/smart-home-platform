@@ -395,9 +395,9 @@ const RecentCommands: React.FC<{ deviceId: number }> = ({ deviceId }) => {
               </span>
               <div>
                 <span className="font-mono font-semibold text-on-surface uppercase">{cmd.command}</span>
-                {payload?.desiredDirection && (
+                {payload?.desiredDirection ? (
                   <span className="ml-1.5 text-xs text-outline">→ {String(payload.desiredDirection)}</span>
-                )}
+                ) : null}
               </div>
             </div>
             <div className="flex items-center gap-sm">

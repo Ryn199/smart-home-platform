@@ -14,6 +14,7 @@ import { ExhaustFanModule } from './exhaust-fan/exhaust-fan.module';
 import { MqttModule } from './mqtt/mqtt.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { AutomationModule } from './automation/automation.module';
+import { FirmwareModule } from './firmware/firmware.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AutomationModule } from './automation/automation.module';
     HomesModule,
     RoomsModule,
     DevicesModule,
+    FirmwareModule,
     TempHumidityModule,
     SmartDoorModule,
     SmartCurtainModule,

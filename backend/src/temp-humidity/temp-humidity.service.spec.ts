@@ -24,6 +24,8 @@ describe('TempHumidityService', () => {
     name: 'Climate Sensor',
     deviceUid: 'th-001',
     macAddress: '24:6F:28:1A:3B:4C',
+    ipAddress: null,
+    firmwareVersion: null,
     pairingCode: 'TH-7788',
     deviceType: DeviceType.TEMP_HUMIDITY,
     status: DeviceStatus.ONLINE,

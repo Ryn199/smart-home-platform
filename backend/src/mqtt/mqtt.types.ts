@@ -1,4 +1,4 @@
-export type MqttMessageType = 'telemetry' | 'state' | 'command' | 'config';
+export type MqttMessageType = 'telemetry' | 'state' | 'command' | 'config' | 'diagnostics' | 'system';
 
 export interface ParsedMqttTopic {
   homeId: string;

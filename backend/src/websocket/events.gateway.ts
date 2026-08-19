@@ -9,6 +9,7 @@ import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import {
   WsCommandPayload,
+  WsDeviceDiagnosticsPayload,
   WsDeviceStatePayload,
   WsDeviceStatusPayload,
   WsEvent,
@@ -61,6 +62,15 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       this.server.emit(WsEvent.DEVICE_STATUS, payload);
       this.logger.debug?.(
         `WebSocket [${WsEvent.DEVICE_STATUS}]: ${payload.deviceUid} -> ${payload.status}`,
+      );
+    }
+  }
+
+  emitDeviceDiagnostics(payload: WsDeviceDiagnosticsPayload): void {
+    if (this.server) {
+      this.server.emit(WsEvent.DEVICE_DIAGNOSTICS, payload);
+      this.logger.debug?.(
+        `WebSocket [${WsEvent.DEVICE_DIAGNOSTICS}]: ${payload.deviceUid}`,
       );
     }
   }

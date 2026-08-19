@@ -17,7 +17,7 @@
 // 3. Hardware Authentication & Device Identity
 // Matches the "Pairing Code" entered when registering the device in Web Admin.
 #define PAIRING_CODE            "EF-7788"
-#define DEFAULT_DEVICE_UID      "EF-KRR-01"
+#define FIRMWARE_VERSION        "1.0.0"
 
 // 4. Hardware Pinout Configuration
 #if defined(ESP32)

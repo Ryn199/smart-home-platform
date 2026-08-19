@@ -368,6 +368,82 @@ export class DevicesService {
     return this.attachComputedStatus(updated);
   }
 
+  async updateDiagnostics(
+    id: number,
+    diagnostics: Record<string, unknown>,
+  ): Promise<Device> {
+    const existing = await this.findOne(id);
+    const existingMeta = (existing.metadata as Record<string, unknown>) || {};
+
+    const updateData: Prisma.DeviceUpdateInput = {
+      metadata: {
+        ...existingMeta,
+        diagnostics,
+      } as Prisma.InputJsonValue,
+    };
+
+    if (diagnostics.ipAddress && typeof diagnostics.ipAddress === 'string') {
+      updateData.ipAddress = diagnostics.ipAddress.trim();
+    }
+    if (diagnostics.firmwareVersion && typeof diagnostics.firmwareVersion === 'string') {
+      updateData.firmwareVersion = diagnostics.firmwareVersion.trim();
+    }
+    if (diagnostics.macAddress && typeof diagnostics.macAddress === 'string' && !existing.macAddress) {
+      updateData.macAddress = diagnostics.macAddress.trim();
+    }
+
+    const updated = await this.prisma.device.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return this.attachComputedStatus(updated);
+  }
+
+  async restart(id: number): Promise<{ message: string; command: DeviceCommand }> {
+    const command = await this.executeCommand(id, { action: 'restart' });
+    return {
+      message: 'Restart command successfully dispatched to ESP node',
+      command,
+    };
+  }
+
+  async openConfigPortal(id: number): Promise<{ message: string; command: DeviceCommand }> {
+    const command = await this.executeCommand(id, { action: 'open_config' });
+    return {
+      message: 'Web Config Portal command successfully dispatched to ESP node',
+      command,
+    };
+  }
+
+  async requestDiagnostics(id: number): Promise<{ message: string; command: DeviceCommand; diagnostics?: Record<string, unknown> | null }> {
+    const device = await this.findOne(id);
+    const command = await this.executeCommand(id, { action: 'get_diagnostics' });
+    const meta = device.metadata as Record<string, unknown> | null;
+    const currentDiagnostics = (meta?.diagnostics as Record<string, unknown>) || null;
+    return {
+      message: 'Diagnostics request sent to device via MQTT',
+      command,
+      diagnostics: currentDiagnostics,
+    };
+  }
+
+  async getDiagnostics(id: number): Promise<Record<string, unknown>> {
+    const device = await this.findOne(id);
+    const meta = device.metadata as Record<string, unknown> | null;
+    const diagnostics = (meta?.diagnostics as Record<string, unknown>) || {};
+    return {
+      deviceUid: device.deviceUid,
+      name: device.name,
+      status: device.status,
+      lastSeenAt: device.lastSeenAt,
+      macAddress: device.macAddress || diagnostics.macAddress || null,
+      ipAddress: device.ipAddress || diagnostics.ipAddress || null,
+      firmwareVersion: device.firmwareVersion || diagnostics.firmwareVersion || null,
+      ...diagnostics,
+    };
+  }
+
   async executeCommand(id: number, dto: ExecuteCommandDto): Promise<DeviceCommand> {
     const device = await this.prisma.device.findUnique({
       where: { id },
@@ -384,58 +460,80 @@ export class DevicesService {
       throw new NotFoundException(`Device with ID ${id} not found`);
     }
 
-    // Validate and format command payload based on DeviceType
+    // Validate and format command payload based on DeviceType or generic system action
     let commandPayload: Record<string, unknown> = {};
 
-    switch (device.deviceType) {
-      case DeviceType.SMART_DOOR: {
-        const validated = this.smartDoorService.validateCommand(dto.action);
-        commandPayload = { action: validated.action };
-        break;
-      }
-
-      case DeviceType.SMART_CURTAIN: {
-        const validated = this.smartCurtainService.validateCommand(dto.action, dto.position);
-        commandPayload = {
-          action: validated.action,
-          ...(validated.position !== undefined ? { position: validated.position } : {}),
-        };
-        break;
-      }
-
-      case DeviceType.EXHAUST_FAN: {
-        const validated = this.exhaustFanService.validateCommand(dto.action, dto.speed);
-
-        // Determine desired state from action
-        const desiredPower = validated.action !== 'off';
-        const desiredDirection = (
-          (dto.direction as string)?.toUpperCase() ||
-          (validated.direction as string)?.toUpperCase() ||
-          'EXHAUST'
-        ) as 'INTAKE' | 'EXHAUST';
-
-        // Persist desired state to DB metadata so ESP32 can reconcile after restart
-        await this.exhaustFanService.applyDesiredState(device.deviceUid, {
-          desiredPower,
-          desiredDirection,
-        });
-
-        commandPayload = {
-          action: validated.action,
-          desiredPower,
-          desiredDirection,
-          ...(validated.direction !== undefined ? { direction: validated.direction } : {}),
-        };
-        break;
-      }
-
-      case DeviceType.TEMP_HUMIDITY:
-      default: {
-        if (!dto.action) {
-          throw new BadRequestException('action is required');
+    const systemActions = [
+      'restart',
+      'reboot',
+      'get_diagnostics',
+      'get_status',
+      'ping',
+      'reset',
+      'open_config',
+      'config_portal',
+      'web_config',
+      'open_web_config',
+      'ota_update',
+      'update_firmware',
+      'flash_firmware',
+    ];
+    if (systemActions.includes(dto.action.toLowerCase())) {
+      commandPayload = {
+        action: dto.action.toLowerCase(),
+        ...(dto.payload || {}),
+      };
+    } else {
+      switch (device.deviceType) {
+        case DeviceType.SMART_DOOR: {
+          const validated = this.smartDoorService.validateCommand(dto.action);
+          commandPayload = { action: validated.action };
+          break;
         }
-        commandPayload = dto.payload ?? { action: dto.action };
-        break;
+
+        case DeviceType.SMART_CURTAIN: {
+          const validated = this.smartCurtainService.validateCommand(dto.action, dto.position);
+          commandPayload = {
+            action: validated.action,
+            ...(validated.position !== undefined ? { position: validated.position } : {}),
+          };
+          break;
+        }
+
+        case DeviceType.EXHAUST_FAN: {
+          const validated = this.exhaustFanService.validateCommand(dto.action, dto.speed);
+
+          // Determine desired state from action
+          const desiredPower = validated.action !== 'off';
+          const desiredDirection = (
+            (dto.direction as string)?.toUpperCase() ||
+            (validated.direction as string)?.toUpperCase() ||
+            'EXHAUST'
+          ) as 'INTAKE' | 'EXHAUST';
+
+          // Persist desired state to DB metadata so ESP32 can reconcile after restart
+          await this.exhaustFanService.applyDesiredState(device.deviceUid, {
+            desiredPower,
+            desiredDirection,
+          });
+
+          commandPayload = {
+            action: validated.action,
+            desiredPower,
+            desiredDirection,
+            ...(validated.direction !== undefined ? { direction: validated.direction } : {}),
+          };
+          break;
+        }
+
+        case DeviceType.TEMP_HUMIDITY:
+        default: {
+          if (!dto.action) {
+            throw new BadRequestException('action is required');
+          }
+          commandPayload = dto.payload ?? { action: dto.action };
+          break;
+        }
       }
     }
 

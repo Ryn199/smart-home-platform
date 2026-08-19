@@ -66,7 +66,7 @@ describe('DeviceCardRenderer', () => {
       lastSeenAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      metadata: { power: true, speed: 2 },
+      metadata: { power: true, operationState: 'RUNNING', desiredPower: true },
     };
 
     render(<DeviceCardRenderer device={device} />);

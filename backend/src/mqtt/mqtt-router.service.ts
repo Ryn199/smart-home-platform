@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { MqttService } from './mqtt.service';
@@ -11,6 +11,7 @@ import { SmartCurtainService } from '../smart-curtain/smart-curtain.service';
 import { SmartCurtainStateDto } from '../smart-curtain/dto/smart-curtain-state.dto';
 import { ExhaustFanService } from '../exhaust-fan/exhaust-fan.service';
 import { ExhaustFanStateDto } from '../exhaust-fan/dto/exhaust-fan-state.dto';
+import { FirmwareService } from '../firmware/firmware.service';
 import { EventsGateway } from '../websocket/events.gateway';
 import { Device, DeviceType, Home, Room } from '@prisma/client';
 
@@ -25,6 +26,8 @@ export class MqttRouterService implements OnModuleInit {
     private readonly smartDoorService: SmartDoorService,
     private readonly smartCurtainService: SmartCurtainService,
     private readonly exhaustFanService: ExhaustFanService,
+    @Inject(forwardRef(() => FirmwareService))
+    private readonly firmwareService: FirmwareService,
     private readonly eventsGateway: EventsGateway,
   ) {}
 
@@ -62,6 +65,12 @@ export class MqttRouterService implements OnModuleInit {
       this.logger.warn(
         `Payload on topic "${rawTopic}" is not a valid JSON object. Message ignored.`,
       );
+      return;
+    }
+
+    // Handle OTA status reports directly
+    if (rawTopic.includes('ota/status') || parsedTopic.messageType === 'ota_status') {
+      await this.firmwareService.handleOTAStatusReport(payload);
       return;
     }
 
@@ -168,13 +177,30 @@ export class MqttRouterService implements OnModuleInit {
       this.logger.error(`Failed to update lastSeenAt for ${device.deviceUid}: ${message}`);
     }
 
-    // 6. Delegate to specialized domain service
+    // 6. Handle internal ESP hardware system diagnostics
     const messageType = parsedTopic.messageType;
+    const isDiagnostics =
+      messageType === 'diagnostics' ||
+      messageType === 'system' ||
+      payload.freeHeap !== undefined ||
+      payload.flashChipSize !== undefined ||
+      payload.sketchSize !== undefined ||
+      payload.cpuFreq !== undefined ||
+      payload.cpuFreqMHz !== undefined ||
+      payload.resetReason !== undefined;
 
+    if (isDiagnostics) {
+      await this.handleDiagnostics(device, payload);
+    }
+
+    // 7. Delegate to specialized domain service
     switch (device.deviceType) {
       case DeviceType.TEMP_HUMIDITY:
-        if (messageType === 'telemetry' || messageType === 'state' || !messageType) {
-          await this.tempHumidityService.handleState(device, payload);
+        if (messageType === 'telemetry' || messageType === 'state' || !messageType || messageType === 'diagnostics') {
+          // If pure diagnostics message without temperature/humidity, ignore domain telemetry
+          if (payload.temperature !== undefined || payload.humidity !== undefined) {
+            await this.tempHumidityService.handleState(device, payload);
+          }
         }
         break;
 
@@ -201,6 +227,77 @@ export class MqttRouterService implements OnModuleInit {
           `Unhandled device type "${String(device.deviceType)}" for device "${device.deviceUid}".`,
         );
         break;
+    }
+  }
+
+  private async handleDiagnostics(
+    device: Device,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      const diagnosticsData: Record<string, unknown> = {
+        macAddress: payload.macAddress || payload.mac || device.macAddress || null,
+        ipAddress: payload.ipAddress || payload.ip || device.ipAddress || null,
+        freeHeap: payload.freeHeap !== undefined ? Number(payload.freeHeap) : undefined,
+        minFreeHeap: payload.minFreeHeap !== undefined ? Number(payload.minFreeHeap) : undefined,
+        rssi: payload.rssi !== undefined ? Number(payload.rssi) : undefined,
+        internalTemp:
+          payload.internalTemp !== undefined
+            ? Number(payload.internalTemp)
+            : payload.internalTemperature !== undefined
+              ? Number(payload.internalTemperature)
+              : undefined,
+        uptime:
+          payload.uptime !== undefined
+            ? Number(payload.uptime)
+            : payload.millis !== undefined
+              ? Number(payload.millis)
+              : undefined,
+        resetReason: payload.resetReason ? String(payload.resetReason) : undefined,
+        firmwareVersion: payload.firmwareVersion
+          ? String(payload.firmwareVersion)
+          : payload.firmware
+            ? String(payload.firmware)
+            : device.firmwareVersion || null,
+        flashChipSize: payload.flashChipSize !== undefined ? Number(payload.flashChipSize) : undefined,
+        sketchSize: payload.sketchSize !== undefined ? Number(payload.sketchSize) : undefined,
+        cpuFreq:
+          payload.cpuFreq !== undefined
+            ? Number(payload.cpuFreq)
+            : payload.cpuFreqMHz !== undefined
+              ? Number(payload.cpuFreqMHz)
+              : undefined,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Filter undefined values
+      Object.keys(diagnosticsData).forEach(
+        (key) => diagnosticsData[key] === undefined && delete diagnosticsData[key],
+      );
+
+      await this.devicesService.updateDiagnostics(device.id, diagnosticsData);
+
+      // Verify ground-truth firmware version reported by ESP
+      if (diagnosticsData.firmwareVersion) {
+        await this.firmwareService.handleFirmwareConfirmed(
+          device.id,
+          String(diagnosticsData.firmwareVersion),
+        );
+      }
+
+      // Emit real-time WebSocket event
+      this.eventsGateway.emitDeviceDiagnostics({
+        deviceUid: device.deviceUid,
+        diagnostics: diagnosticsData,
+        timestamp: new Date(),
+      });
+
+      this.logger.log(
+        `Diagnostics updated for device [${device.deviceUid}]: freeHeap=${diagnosticsData.freeHeap}, rssi=${diagnosticsData.rssi}, ip=${diagnosticsData.ipAddress}`,
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to handle diagnostics for device ${device.deviceUid}: ${msg}`);
     }
   }
 

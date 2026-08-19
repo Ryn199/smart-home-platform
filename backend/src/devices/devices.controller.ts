@@ -107,6 +107,40 @@ export class DevicesController {
     return this.devicesService.remove(id);
   }
 
+  @Post('devices/:id/restart')
+  @ApiOperation({ summary: 'Send restart command to ESP device node' })
+  @ApiResponse({ status: 200, description: 'Restart command sent' })
+  @ApiResponse({ status: 404, description: 'Device not found' })
+  async restart(@Param('id', ParseIntPipe) id: number): Promise<{ message: string; command: DeviceCommand }> {
+    return this.devicesService.restart(id);
+  }
+
+  @Post('devices/:id/open-config')
+  @ApiOperation({ summary: 'Send command to put ESP device into Web Config Portal mode' })
+  @ApiResponse({ status: 200, description: 'Config portal command sent' })
+  @ApiResponse({ status: 404, description: 'Device not found' })
+  async openConfigPortal(@Param('id', ParseIntPipe) id: number): Promise<{ message: string; command: DeviceCommand }> {
+    return this.devicesService.openConfigPortal(id);
+  }
+
+  @Post('devices/:id/diagnostics/refresh')
+  @ApiOperation({ summary: 'Request immediate system diagnostics telemetry from ESP device via MQTT' })
+  @ApiResponse({ status: 200, description: 'Diagnostics request sent' })
+  @ApiResponse({ status: 404, description: 'Device not found' })
+  async refreshDiagnostics(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<{ message: string; command: DeviceCommand; diagnostics?: Record<string, unknown> | null }> {
+    return this.devicesService.requestDiagnostics(id);
+  }
+
+  @Get('devices/:id/diagnostics')
+  @ApiOperation({ summary: 'Get current/cached ESP hardware system diagnostics for device' })
+  @ApiResponse({ status: 200, description: 'Device system diagnostics' })
+  @ApiResponse({ status: 404, description: 'Device not found' })
+  async getDiagnostics(@Param('id', ParseIntPipe) id: number): Promise<Record<string, unknown>> {
+    return this.devicesService.getDiagnostics(id);
+  }
+
   @Post('devices/:id/reset-auth')
   @ApiOperation({ summary: 'Reset device hardware MAC address binding so a new ESP hardware can pair' })
   @ApiResponse({ status: 200, description: 'Device authentication reset successfully' })

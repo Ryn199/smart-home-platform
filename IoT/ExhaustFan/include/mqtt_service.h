@@ -21,6 +21,7 @@ public:
   void update();
 
   void publishState(bool force = false);
+  bool publishDiagnostics();
   bool isConnected();
 
 private:

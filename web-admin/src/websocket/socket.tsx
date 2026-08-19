@@ -29,6 +29,12 @@ export interface CommandExecutedEvent {
   executedAt: string;
 }
 
+export interface DeviceDiagnosticsEvent {
+  deviceUid: string;
+  diagnostics: Record<string, unknown>;
+  timestamp: string;
+}
+
 export interface ActivityEvent {
   id: string;
   message: string;
@@ -41,6 +47,7 @@ interface WebSocketContextType {
   telemetry: Record<string, Record<string, number>>; // deviceUid -> sensorType -> value
   deviceStates: Record<string, Record<string, unknown>>; // deviceUid -> state
   deviceStatuses: Record<string, 'online' | 'offline'>; // deviceUid -> status
+  deviceDiagnostics: Record<string, Record<string, unknown>>; // deviceUid -> diagnostics
   activities: ActivityEvent[];
 }
 
@@ -49,6 +56,7 @@ const WebSocketContext = createContext<WebSocketContextType>({
   telemetry: {},
   deviceStates: {},
   deviceStatuses: {},
+  deviceDiagnostics: {},
   activities: [],
 });
 
@@ -60,6 +68,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const [telemetry, setTelemetry] = useState<Record<string, Record<string, number>>>({});
   const [deviceStates, setDeviceStates] = useState<Record<string, Record<string, unknown>>>({});
   const [deviceStatuses, setDeviceStatuses] = useState<Record<string, 'online' | 'offline'>>({});
+  const [deviceDiagnostics, setDeviceDiagnostics] = useState<Record<string, Record<string, unknown>>>({});
   const [activities, setActivities] = useState<ActivityEvent[]>([
     { id: '1', message: 'System initialized and connected', time: 'Just now', timestamp: Date.now() },
   ]);
@@ -147,6 +156,29 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       queryClient.invalidateQueries({ queryKey: ['presence'] });
     });
 
+    s.on('device.diagnostics', (data: DeviceDiagnosticsEvent) => {
+      setDeviceDiagnostics((prev) => ({
+        ...prev,
+        [data.deviceUid]: {
+          ...(prev[data.deviceUid] || {}),
+          ...data.diagnostics,
+        },
+      }));
+
+      setActivities((prev) => [
+        {
+          id: Math.random().toString(),
+          message: `Diagnostics received from ${data.deviceUid}`,
+          time: 'Just now',
+          timestamp: Date.now(),
+        },
+        ...prev.slice(0, 19),
+      ]);
+
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['device-diagnostics', data.deviceUid] });
+    });
+
     s.on('command.executed', (data: CommandExecutedEvent) => {
       setActivities((prev) => [
         {
@@ -178,6 +210,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
         telemetry,
         deviceStates,
         deviceStatuses,
+        deviceDiagnostics,
         activities,
       }}
     >

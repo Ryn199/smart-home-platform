@@ -59,6 +59,22 @@ void MqttService::handleMessage(char* topic, byte* payloadBytes, unsigned int le
   const char* action = doc["action"] | "";
   const char* dirStr = doc["direction"] | "";
 
+  // Check if restart / reboot requested
+  if (strcmp(action, "restart") == 0 || strcmp(action, "reboot") == 0) {
+    Serial.println("[MQTT] Restart command received! Rebooting ESP in 500ms...");
+    delay(500);
+    ESP.restart();
+    return;
+  }
+
+  // Check if get_diagnostics requested
+  if (strcmp(action, "get_diagnostics") == 0 || strcmp(action, "get_status") == 0 || strcmp(action, "ping") == 0) {
+    Serial.println("[MQTT] Diagnostics request received. Publishing latest status...");
+    publishDiagnostics();
+    publishState(true);
+    return;
+  }
+
   // Check if clear_error / reset requested
   if (strcmp(action, "clear_error") == 0 || strcmp(action, "reset") == 0) {
     _fsm->clearError();
@@ -120,15 +136,59 @@ void MqttService::reconnect() {
     // Subscribe to command topic patterns
     _mqttClient.subscribe("home/+/+/+/command");
     _mqttClient.subscribe("iot/+/command");
-    Serial.println("[MQTT] Subscribed to command topics: home/+/+/+/command, iot/+/command");
+    _mqttClient.subscribe("iot/command");
+    Serial.println("[MQTT] Subscribed to command topics: home/+/+/+/command, iot/+/command, iot/command");
 
-    // Broadcast initial boot state
+    // Broadcast initial boot state and diagnostics
     publishState(true);
+    publishDiagnostics();
   } else {
     Serial.print("[MQTT] Failed connection, state=");
     Serial.print(_mqttClient.state());
     Serial.println(" - Will retry in 5 seconds...");
   }
+}
+
+bool MqttService::publishDiagnostics() {
+  if (!_mqttClient.connected()) return false;
+
+  const char* diagnosticsTopic = "iot/diagnostics";
+
+  JsonDocument doc;
+  doc["pairingCode"]     = PAIRING_CODE;
+  doc["macAddress"]      = _macAddress;
+  doc["ipAddress"]       = WiFi.localIP().toString();
+  doc["freeHeap"]        = ESP.getFreeHeap();
+#if defined(ESP32)
+  doc["minFreeHeap"]     = ESP.getMinFreeHeap();
+  doc["internalTemp"]    = round(temperatureRead() * 10.0) / 10.0;
+#elif defined(ESP8266)
+  doc["minFreeHeap"]     = ESP.getFreeHeap();
+  doc["internalTemp"]    = 0.0;
+#endif
+  doc["rssi"]            = WiFi.RSSI();
+  doc["uptime"]          = millis();
+#if defined(ESP32)
+  doc["resetReason"]     = esp_reset_reason() == ESP_RST_POWERON ? "POWERON_RESET" : "SW_CPU_RESET";
+#elif defined(ESP8266)
+  doc["resetReason"]     = ESP.getResetReason();
+#endif
+  doc["firmwareVersion"] = FIRMWARE_VERSION;
+  doc["flashChipSize"]   = ESP.getFlashChipSize();
+  doc["sketchSize"]      = ESP.getSketchSize();
+  doc["cpuFreq"]         = ESP.getCpuFreqMHz();
+
+  char jsonBuffer[512];
+  serializeJson(doc, jsonBuffer);
+
+  bool ok = _mqttClient.publish(diagnosticsTopic, jsonBuffer);
+  if (ok) {
+    Serial.print("[MQTT] Diagnostics Published -> ");
+    Serial.print(diagnosticsTopic);
+    Serial.print(" : ");
+    Serial.println(jsonBuffer);
+  }
+  return ok;
 }
 
 void MqttService::publishState(bool force) {
@@ -140,7 +200,7 @@ void MqttService::publishState(bool force) {
   JsonDocument doc;
   doc["pairingCode"]      = PAIRING_CODE;
   doc["macAddress"]       = _macAddress;
-  doc["deviceUid"]        = DEFAULT_DEVICE_UID;
+  doc["ipAddress"]        = WiFi.localIP().toString();
   doc["power"]             = _fsm->getActualPower();
   doc["direction"]         = directionToString(_fsm->getActualDirection());
   doc["desiredPower"]      = _fsm->getDesiredPower();

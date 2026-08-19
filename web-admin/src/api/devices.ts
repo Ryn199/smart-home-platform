@@ -83,4 +83,27 @@ export const devicesApi = {
     apiClient<{ message: string; device: Device }>(`/devices/${id}/reset-auth`, {
       method: 'POST',
     }),
+
+  restart: (id: number): Promise<{ message: string; command: DeviceCommand }> =>
+    apiClient<{ message: string; command: DeviceCommand }>(`/devices/${id}/restart`, {
+      method: 'POST',
+    }),
+
+  openConfigPortal: (id: number): Promise<{ message: string; command: DeviceCommand }> =>
+    apiClient<{ message: string; command: DeviceCommand }>(`/devices/${id}/open-config`, {
+      method: 'POST',
+    }),
+
+  refreshDiagnostics: (
+    id: number,
+  ): Promise<{ message: string; command: DeviceCommand; diagnostics?: Record<string, unknown> | null }> =>
+    apiClient<{ message: string; command: DeviceCommand; diagnostics?: Record<string, unknown> | null }>(
+      `/devices/${id}/diagnostics/refresh`,
+      {
+        method: 'POST',
+      },
+    ),
+
+  getDiagnostics: (id: number): Promise<Record<string, unknown>> =>
+    apiClient<Record<string, unknown>>(`/devices/${id}/diagnostics`),
 };

@@ -96,6 +96,35 @@ client.on('message', (topic, message) => {
 
     if (!device) return;
 
+    if (command.action === 'restart' || command.action === 'reboot') {
+      console.log(`[Simulator] ESP node "${device.deviceUid}" rebooting...`);
+      setTimeout(() => {
+        console.log(`[Simulator] ESP node "${device.deviceUid}" reboot complete.`);
+      }, 2000);
+      return;
+    }
+
+    if (command.action === 'get_diagnostics' || command.action === 'get_status') {
+      const diagPayload = {
+        pairingCode: device.pairingCode,
+        macAddress: device.macAddress,
+        ipAddress: '192.168.1.105',
+        freeHeap: 245312,
+        minFreeHeap: 218940,
+        rssi: -62,
+        internalTemp: 46.2,
+        uptime: 3600000,
+        resetReason: 'POWERON_RESET',
+        firmwareVersion: '1.0.0',
+        flashChipSize: 4194304,
+        sketchSize: 1208416,
+        cpuFreq: 240,
+      };
+      client.publish('iot/diagnostics', JSON.stringify(diagPayload));
+      console.log(`[Simulator] Responded to diagnostics request -> iot/diagnostics:`, diagPayload);
+      return;
+    }
+
     if (device.type === 'SMART_DOOR') {
       if (command.action === 'unlock') device.state = { door: 'closed', lock: 'unlocked' };
       if (command.action === 'lock') device.state = { door: 'closed', lock: 'locked' };

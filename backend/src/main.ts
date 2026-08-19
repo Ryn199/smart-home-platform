@@ -10,7 +10,7 @@ async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: false }),
+    new FastifyAdapter({ logger: false, bodyLimit: 15 * 1024 * 1024 }),
   );
 
   // Security: Helmet HTTP Headers (with CSP config for Swagger UI)

@@ -2,6 +2,7 @@ export enum WsEvent {
   SENSOR_TELEMETRY = 'sensor.telemetry',
   DEVICE_STATE = 'device.state',
   DEVICE_STATUS = 'device.status',
+  DEVICE_DIAGNOSTICS = 'device.diagnostics',
   COMMAND_EXECUTED = 'command.executed',
 }
 
@@ -23,6 +24,12 @@ export interface WsDeviceStatusPayload {
   deviceUid: string;
   status: string;
   lastSeenAt: string | Date;
+}
+
+export interface WsDeviceDiagnosticsPayload {
+  deviceUid: string;
+  diagnostics: Record<string, unknown>;
+  timestamp: string | Date;
 }
 
 export interface WsCommandPayload {

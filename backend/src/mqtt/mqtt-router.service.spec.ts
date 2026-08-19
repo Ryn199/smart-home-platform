@@ -6,6 +6,7 @@ import { TempHumidityService } from '../temp-humidity/temp-humidity.service';
 import { SmartDoorService } from '../smart-door/smart-door.service';
 import { SmartCurtainService } from '../smart-curtain/smart-curtain.service';
 import { ExhaustFanService } from '../exhaust-fan/exhaust-fan.service';
+import { FirmwareService } from '../firmware/firmware.service';
 import { EventsGateway } from '../websocket/events.gateway';
 import { NotFoundException } from '@nestjs/common';
 import { Device, DeviceStatus, DeviceType } from '@prisma/client';
@@ -23,6 +24,10 @@ describe('MqttRouterService', () => {
   let smartDoorService: { updateState: jest.Mock };
   let smartCurtainService: { updateState: jest.Mock };
   let exhaustFanService: { updateState: jest.Mock };
+  let firmwareService: {
+    handleOTAStatusReport: jest.Mock;
+    handleFirmwareConfirmed: jest.Mock;
+  };
 
   beforeEach(async () => {
     mqttService = { registerHandler: jest.fn() };
@@ -36,6 +41,10 @@ describe('MqttRouterService', () => {
     smartDoorService = { updateState: jest.fn() };
     smartCurtainService = { updateState: jest.fn() };
     exhaustFanService = { updateState: jest.fn() };
+    firmwareService = {
+      handleOTAStatusReport: jest.fn().mockResolvedValue(undefined),
+      handleFirmwareConfirmed: jest.fn().mockResolvedValue(undefined),
+    };
 
     const eventsGateway = {
       emitTelemetry: jest.fn(),
@@ -53,6 +62,7 @@ describe('MqttRouterService', () => {
         { provide: SmartDoorService, useValue: smartDoorService },
         { provide: SmartCurtainService, useValue: smartCurtainService },
         { provide: ExhaustFanService, useValue: exhaustFanService },
+        { provide: FirmwareService, useValue: firmwareService },
         { provide: EventsGateway, useValue: eventsGateway },
       ],
     }).compile();
@@ -88,6 +98,8 @@ describe('MqttRouterService', () => {
       name: 'Living Room DHT',
       deviceUid: 'th-001',
       macAddress: null, // Initially unbound
+      ipAddress: null,
+      firmwareVersion: null,
       pairingCode: 'TH-7788',
       deviceType: DeviceType.TEMP_HUMIDITY,
       status: DeviceStatus.ONLINE,
@@ -131,6 +143,8 @@ describe('MqttRouterService', () => {
       name: 'Living Room DHT',
       deviceUid: 'th-001',
       macAddress: '24:6F:28:1A:3B:4C', // Already bound to ESP #1
+      ipAddress: null,
+      firmwareVersion: null,
       pairingCode: 'TH-7788',
       deviceType: DeviceType.TEMP_HUMIDITY,
       status: DeviceStatus.ONLINE,
@@ -170,6 +184,8 @@ describe('MqttRouterService', () => {
       name: 'Living Room DHT',
       deviceUid: 'th-001',
       macAddress: '24:6F:28:1A:3B:4C',
+      ipAddress: null,
+      firmwareVersion: null,
       pairingCode: 'TH-7788',
       deviceType: DeviceType.TEMP_HUMIDITY,
       status: DeviceStatus.ONLINE,
@@ -207,6 +223,8 @@ describe('MqttRouterService', () => {
       name: 'Door',
       deviceUid: 'door-001',
       macAddress: null,
+      ipAddress: null,
+      firmwareVersion: null,
       pairingCode: null,
       deviceType: DeviceType.SMART_DOOR,
       status: DeviceStatus.ONLINE,

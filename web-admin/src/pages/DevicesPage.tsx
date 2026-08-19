@@ -1,19 +1,16 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { devicesApi } from '../api/devices';
 import { homesApi } from '../api/homes';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { Device, DeviceCommand, DeviceType } from '../types';
+import { Device, DeviceType } from '../types';
 
 export const DevicesPage: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
-  const [deviceToDelete, setDeviceToDelete] = useState<Device | null>(null);
-  const [deviceToResetAuth, setDeviceToResetAuth] = useState<Device | null>(null);
-  const [historyDeviceId, setHistoryDeviceId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -39,13 +36,6 @@ export const DevicesPage: React.FC = () => {
     queryFn: () => devicesApi.getAll(),
   });
 
-  // Fetch command history if selected
-  const { data: commandHistory = [] } = useQuery({
-    queryKey: ['deviceCommands', historyDeviceId],
-    queryFn: () => (historyDeviceId ? devicesApi.getCommands(historyDeviceId) : []),
-    enabled: !!historyDeviceId,
-  });
-
   const registerMutation = useMutation({
     mutationFn: devicesApi.create,
     onSuccess: () => {
@@ -59,58 +49,9 @@ export const DevicesPage: React.FC = () => {
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({
-      id,
-      data,
-    }: {
-      id: number;
-      data: { name?: string; roomId?: number; macAddress?: string; pairingCode?: string };
-    }) => devicesApi.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['devices'] });
-      closeModal();
-      setSuccessMessage('Device updated successfully!');
-      setTimeout(() => setSuccessMessage(null), 5000);
-    },
-    onError: (err: any) => {
-      setErrorMessage(err?.message || 'Failed to update device');
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: devicesApi.delete,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['devices'] });
-      setDeviceToDelete(null);
-      setSuccessMessage('Device deleted successfully.');
-      setTimeout(() => setSuccessMessage(null), 5000);
-    },
-    onError: (err: any) => {
-      setErrorMessage(`Delete failed: ${err?.message || 'Unknown error'}`);
-      setDeviceToDelete(null);
-    },
-  });
-
-  const resetAuthMutation = useMutation({
-    mutationFn: (id: number) => devicesApi.resetAuth(id),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['devices'] });
-      setDeviceToResetAuth(null);
-      setSuccessMessage(res.message || 'Device authentication reset. You can now pair a new ESP board.');
-      setTimeout(() => setSuccessMessage(null), 6000);
-    },
-    onError: (err: any) => {
-      setErrorMessage(`Reset auth failed: ${err?.message || 'Unknown error'}`);
-      setDeviceToResetAuth(null);
-    },
-  });
-
   const openCreateModal = () => {
-    setEditingDevice(null);
     setName('');
     setDeviceUid('');
-    setMacAddress('');
     setPairingCode('');
     setDeviceType('');
     setRoomId(0);
@@ -118,24 +59,10 @@ export const DevicesPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const openEditModal = (device: Device) => {
-    setEditingDevice(device);
-    setName(device.name);
-    setDeviceUid(device.deviceUid);
-    setMacAddress(device.macAddress || '');
-    setPairingCode(device.pairingCode || '');
-    setDeviceType(device.deviceType);
-    setRoomId(device.roomId);
-    setErrorMessage(null);
-    setIsModalOpen(true);
-  };
-
   const closeModal = () => {
     setIsModalOpen(false);
-    setEditingDevice(null);
     setName('');
     setDeviceUid('');
-    setMacAddress('');
     setPairingCode('');
     setDeviceType('');
     setRoomId(0);
@@ -154,55 +81,27 @@ export const DevicesPage: React.FC = () => {
       setErrorMessage('Nama perangkat wajib diisi');
       return;
     }
-
-    if (editingDevice) {
-      if (!roomId || roomId === 0) {
-        setErrorMessage('Silakan pilih ruangan');
-        return;
-      }
-      updateMutation.mutate({
-        id: editingDevice.id,
-        data: {
-          name: name.trim(),
-          roomId,
-          macAddress: macAddress.trim() || undefined,
-          pairingCode: pairingCode.trim() || undefined,
-        },
-      });
-    } else {
-      if (!deviceUid.trim()) {
-        setErrorMessage('UID perangkat wajib diisi');
-        return;
-      }
-      if (!deviceType) {
-        setErrorMessage('Silakan pilih tipe perangkat');
-        return;
-      }
-      if (!roomId || roomId === 0) {
-        setErrorMessage('Silakan pilih ruangan');
-        return;
-      }
-      registerMutation.mutate({
-        name: name.trim(),
-        deviceUid: deviceUid.trim(),
-        macAddress: macAddress.trim() || undefined,
-        pairingCode: pairingCode.trim() || undefined,
-        deviceType: deviceType as DeviceType,
-        roomId,
-      });
+    if (!deviceUid.trim()) {
+      setErrorMessage('UID perangkat wajib diisi');
+      return;
     }
-  };
-
-  const handleConfirmDelete = () => {
-    if (deviceToDelete) {
-      deleteMutation.mutate(deviceToDelete.id);
+    if (!deviceType) {
+      setErrorMessage('Silakan pilih tipe perangkat');
+      return;
     }
-  };
-
-  const handleConfirmResetAuth = () => {
-    if (deviceToResetAuth) {
-      resetAuthMutation.mutate(deviceToResetAuth.id);
+    if (!roomId || roomId === 0) {
+      setErrorMessage('Silakan pilih ruangan');
+      return;
     }
+
+    registerMutation.mutate({
+      name: name.trim(),
+      deviceUid: deviceUid.trim(),
+      macAddress: macAddress.trim() || undefined,
+      pairingCode: pairingCode.trim() || undefined,
+      deviceType: deviceType as DeviceType,
+      roomId,
+    });
   };
 
   return (
@@ -400,44 +299,15 @@ export const DevicesPage: React.FC = () => {
                       </span>
                     </td>
 
-                    <td className="px-lg py-md text-right space-x-1">
+                    {/* Action Column: Single Unified Setting Button */}
+                    <td className="px-lg py-md text-right">
                       <button
-                        onClick={() => setHistoryDeviceId(device.id)}
-                        className="text-primary hover:underline font-semibold text-xs px-2 py-1 cursor-pointer"
+                        onClick={() => navigate(`/devices/${device.id}`)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-on-primary rounded-lg text-xs font-bold border border-primary/20 transition-all cursor-pointer shadow-xs active:scale-95"
+                        title="Buka Halaman Pengaturan, Diagnostik &amp; Firmware"
                       >
-                        History
-                      </button>
-
-                      {/* Reset Auth Button (Visible if MAC is bound) */}
-                      {device.macAddress && (
-                        <button
-                          onClick={() => setDeviceToResetAuth(device)}
-                          className="text-amber-600 hover:bg-amber-50 p-1 rounded transition-colors cursor-pointer"
-                          title="Reset Auth / Unbind MAC (Allow new ESP board to connect)"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">
-                            link_off
-                          </span>
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => openEditModal(device)}
-                        className="text-on-surface-variant hover:text-primary hover:bg-surface-container-high p-1 rounded transition-colors cursor-pointer"
-                        title="Edit Device"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">
-                          edit
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => setDeviceToDelete(device)}
-                        className="text-error hover:bg-error-container/20 p-1 rounded transition-colors cursor-pointer"
-                        title="Delete Device"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">
-                          delete
-                        </span>
+                        <span className="material-symbols-outlined text-[16px]">settings</span>
+                        Setting &amp; OTA
                       </button>
                     </td>
                   </tr>
@@ -448,12 +318,12 @@ export const DevicesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Register / Edit Device Modal */}
+      {/* Register New Device Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface border border-outline-variant rounded-xl p-lg max-w-md w-full shadow-lg space-y-md animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             <h3 className="font-headline-md text-headline-md text-on-surface font-semibold">
-              {editingDevice ? 'Edit Device' : 'Register New Device'}
+              Register New Device
             </h3>
 
             {errorMessage && (
@@ -484,11 +354,10 @@ export const DevicesPage: React.FC = () => {
                 <input
                   type="text"
                   required
-                  disabled={!!editingDevice}
                   placeholder="UID unik perangkat (e.g. th-001)"
                   value={deviceUid}
                   onChange={(e) => setDeviceUid(e.target.value)}
-                  className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm font-data-mono disabled:opacity-50 disabled:bg-surface-container-low"
+                  className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm font-data-mono"
                 />
               </div>
 
@@ -515,31 +384,6 @@ export const DevicesPage: React.FC = () => {
                     Hardcode kode ini pada firmware ESP Anda. Saat ESP pertama kali terhubung, MAC address ESP akan otomatis terikat.
                   </span>
                 </div>
-
-                {editingDevice && (
-                  <div>
-                    <label className="block text-[11px] font-semibold text-on-surface-variant uppercase mb-1">
-                      Bound MAC Address
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        disabled
-                        value={macAddress || 'Belum terikat (Menunggu ESP)'}
-                        className="w-full px-3 py-1.5 border border-outline-variant rounded-lg bg-surface-container-highest text-on-surface-variant text-xs font-data-mono disabled:opacity-75"
-                      />
-                      {macAddress && (
-                        <button
-                          type="button"
-                          onClick={() => setMacAddress('')}
-                          className="px-2.5 py-1.5 text-xs border border-error/40 text-error hover:bg-error-container/20 rounded-lg cursor-pointer whitespace-nowrap"
-                        >
-                          Clear MAC
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div>
@@ -547,10 +391,9 @@ export const DevicesPage: React.FC = () => {
                   Device Type *
                 </label>
                 <select
-                  disabled={!!editingDevice}
                   value={deviceType}
                   onChange={(e) => setDeviceType(e.target.value as DeviceType)}
-                  className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm disabled:opacity-50 disabled:bg-surface-container-low"
+                  className="w-full px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary text-sm"
                 >
                   <option value="" disabled>
                     Pilih tipe perangkat
@@ -592,90 +435,16 @@ export const DevicesPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={registerMutation.isPending || updateMutation.isPending}
+                  disabled={registerMutation.isPending}
                   className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
                 >
-                  {registerMutation.isPending || updateMutation.isPending
-                    ? 'Saving...'
-                    : editingDevice
-                      ? 'Update Device'
-                      : 'Register'}
+                  {registerMutation.isPending ? 'Registering...' : 'Register Device'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
-      {/* Command History Modal */}
-      {historyDeviceId && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface border border-outline-variant rounded-xl p-lg max-w-lg w-full shadow-lg space-y-md max-h-[80vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex justify-between items-center border-b border-outline-variant pb-sm">
-              <h3 className="font-headline-md text-headline-md text-on-surface font-semibold">
-                Command Execution History
-              </h3>
-              <button
-                onClick={() => setHistoryDeviceId(null)}
-                className="text-outline hover:text-on-surface cursor-pointer"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-sm">
-              {commandHistory.length === 0 ? (
-                <p className="text-center py-lg text-outline text-sm">
-                  No commands recorded for this device yet.
-                </p>
-              ) : (
-                commandHistory.map((cmd: DeviceCommand) => (
-                  <div
-                    key={cmd.id}
-                    className="p-md bg-surface-container-low rounded-lg border border-outline-variant flex justify-between items-center text-sm"
-                  >
-                    <div>
-                      <span className="font-bold text-on-surface uppercase font-data-mono">
-                        {cmd.command}
-                      </span>
-                      <p className="text-xs text-outline">
-                        {new Date(cmd.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-primary-fixed-dim/40 text-primary">
-                      {cmd.status}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reset Auth Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={!!deviceToResetAuth}
-        title="Reset Hardware Authentication"
-        message={`Are you sure you want to unbind MAC address "${deviceToResetAuth?.macAddress}" from device "${deviceToResetAuth?.name}"? Once reset, a new ESP board with pairing code "${deviceToResetAuth?.pairingCode}" can bind to this device.`}
-        confirmLabel="Yes, Reset Auth"
-        isDestructive={false}
-        isLoading={resetAuthMutation.isPending}
-        onConfirm={handleConfirmResetAuth}
-        onCancel={() => setDeviceToResetAuth(null)}
-      />
-
-      {/* Delete Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={!!deviceToDelete}
-        title="Delete Device"
-        message={`Are you sure you want to delete device "${deviceToDelete?.name}" (${deviceToDelete?.deviceUid})?`}
-        confirmLabel="Yes, Delete Device"
-        isDestructive={true}
-        isLoading={deleteMutation.isPending}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setDeviceToDelete(null)}
-      />
     </div>
   );
 };

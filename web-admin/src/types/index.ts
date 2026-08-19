@@ -45,17 +45,56 @@ export interface Room {
   };
 }
 
+export interface EspDiagnostics {
+  macAddress?: string | null;
+  ipAddress?: string | null;
+  freeHeap?: number | null;
+  minFreeHeap?: number | null;
+  rssi?: number | null;
+  internalTemp?: number | null;
+  uptime?: number | null;
+  resetReason?: string | null;
+  firmwareVersion?: string | null;
+  flashChipSize?: number | null;
+  sketchSize?: number | null;
+  cpuFreq?: number | null;
+  updatedAt?: string | null;
+}
+
+export type FirmwareStatus = 'READY' | 'FLASHING' | 'ACTIVE' | 'FAILED' | 'PREVIOUS' | 'ARCHIVED';
+
+export interface Firmware {
+  id: number;
+  deviceId: number;
+  version: string;
+  fileName: string;
+  fileSize: number;
+  checksum?: string | null;
+  changelog?: string | null;
+  isCurrent: boolean;
+  uploadedAt: string;
+  deployedAt?: string | null;
+  status: FirmwareStatus;
+}
+
 export interface Device {
   id: number;
   roomId: number;
   name: string;
   deviceUid: string;
   macAddress?: string | null;
+  ipAddress?: string | null;
+  firmwareVersion?: string | null;
   pairingCode?: string | null;
   deviceType: DeviceType;
   status: DeviceStatus;
   lastSeenAt: string | null;
-  metadata?: Record<string, unknown> | null;
+  metadata?: {
+    diagnostics?: EspDiagnostics;
+    temperature?: number;
+    humidity?: number;
+    [key: string]: unknown;
+  } | null;
   createdAt: string;
   updatedAt: string;
   room?: Room & { home?: Home };

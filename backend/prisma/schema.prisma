@@ -81,18 +81,21 @@ model Device {
   roomId      Int
   name        String
   deviceUid   String       @unique
-  macAddress  String?      // Hardware MAC address for identity matching
-  pairingCode String?      // Secret pairing token/code for payload authentication
-  deviceType  DeviceType   @default(TEMP_HUMIDITY)
-  status      DeviceStatus @default(UNKNOWN)
-  lastSeenAt  DateTime?
-  metadata    Json?        // Holds live domain state (e.g. { temperature: 28.5, humidity: 65 })
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  macAddress      String?      // Hardware MAC address for identity matching
+  ipAddress       String?      // Local IP address of ESP node
+  firmwareVersion String?      // Program / firmware version (e.g. 1.0.0)
+  pairingCode     String?      // Secret pairing token/code for payload authentication
+  deviceType      DeviceType   @default(TEMP_HUMIDITY)
+  status          DeviceStatus @default(UNKNOWN)
+  lastSeenAt      DateTime?
+  metadata        Json?        // Holds live domain state & diagnostics snapshot
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   room                 Room                  @relation(fields: [roomId], references: [id], onDelete: Cascade)
   commands             DeviceCommand[]
   tempHumidityReadings TempHumidityReading[]
+  firmwares            Firmware[]
 
   @@index([roomId])
   @@index([deviceUid])
@@ -100,6 +103,41 @@ model Device {
   @@index([pairingCode])
   @@index([lastSeenAt])
   @@map("devices")
+}
+
+// ============================================================
+// FIRMWARE (OTA Binary & Version Management Table)
+// ============================================================
+
+enum FirmwareStatus {
+  READY
+  FLASHING
+  ACTIVE
+  FAILED
+  PREVIOUS
+  ARCHIVED
+}
+
+model Firmware {
+  id          Int            @id @default(autoincrement())
+  deviceId    Int
+  version     String         // e.g. "1.0.1"
+  fileName    String         // original file name e.g. "firmware_v1.0.1.bin"
+  fileSize    Int            // in bytes
+  fileData    Bytes?         // binary content stored in database
+  checksum    String?        // SHA-256 hash for integrity verification
+  changelog   String?        // Release notes / description
+  isCurrent   Boolean        @default(false)
+  uploadedAt  DateTime       @default(now())
+  deployedAt  DateTime?      // timestamp when flashed/updated to ESP
+  status      FirmwareStatus @default(READY)
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([deviceId, isCurrent])
+  @@index([uploadedAt])
+  @@map("firmwares")
 }
 
 // ============================================================
