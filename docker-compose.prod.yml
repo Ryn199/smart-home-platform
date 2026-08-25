@@ -29,9 +29,9 @@ services:
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -c 1 -i healthcheck || exit 1"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 1883 || exit 1"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 5
 
   backend:
