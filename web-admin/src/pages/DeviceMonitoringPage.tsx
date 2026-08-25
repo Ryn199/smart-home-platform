@@ -54,6 +54,8 @@ export const DeviceMonitoringPage: React.FC = () => {
       navigate(`/monitoring/temp-humidity/${device.deviceUid}`);
     } else if (device.deviceType === 'EXHAUST_FAN') {
       navigate(`/monitoring/exhaust-fan/${device.deviceUid}`);
+    } else if (device.deviceType === 'SMART_CURTAIN') {
+      navigate(`/monitoring/smart-curtain/${device.deviceUid}`);
     } else {
       // Direct to specific monitoring or fallback
       navigate(`/monitoring/${device.deviceUid}`);

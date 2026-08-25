@@ -749,6 +749,29 @@ export const DeviceDetailsPage: React.FC = () => {
             </div>
           )}
 
+          {device.deviceType === 'SMART_CURTAIN' && (
+            <div className="p-5 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-600 text-white rounded-xl shadow-md">
+                  <span className="material-symbols-outlined text-[32px]">roller_shades</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-on-surface">Smart Curtain Controller</h3>
+                  <p className="text-xs text-on-surface-variant">
+                    Monitoring posisi gorden tergulung (0–100%), visualisasi jendela, dan kontrol motor stepper.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to={`/monitoring/smart-curtain/${device.deviceUid}`}
+                className="px-4 py-2.5 bg-primary text-on-primary font-bold text-xs rounded-xl shadow-sm hover:bg-primary/90 transition-all flex items-center gap-2 shrink-0"
+              >
+                <span>Buka Kendali Smart Curtain</span>
+                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+              </Link>
+            </div>
+          )}
+
           {/* Quick Hardware Diagnostic Preview */}
           <div className="p-5 bg-surface border border-outline-variant rounded-2xl space-y-4">
             <div className="flex justify-between items-center">

@@ -6,6 +6,9 @@ import { OverviewPage } from '../pages/OverviewPage';
 import { DeviceMonitoringPage } from '../pages/DeviceMonitoringPage';
 import { TempHumidityMonitoringPage } from '../pages/monitoring/TempHumidityMonitoringPage';
 import { ExhaustFanMonitoringPage } from '../pages/monitoring/ExhaustFanMonitoringPage';
+import { SmartCurtainMonitoringPage } from '../pages/monitoring/SmartCurtainMonitoringPage';
+import { useQuery } from '@tanstack/react-query';
+import { devicesApi } from '../api/devices';
 import { HomesPage } from '../pages/HomesPage';
 import { RoomsPage } from '../pages/RoomsPage';
 import { DevicesPage } from '../pages/DevicesPage';
@@ -39,9 +42,33 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-// Device router redirect helper
+// Intelligent Device router redirect helper based on device type
 const DeviceMonitoringRedirect: React.FC = () => {
   const { deviceUid } = useParams<{ deviceUid: string }>();
+
+  const { data: devices = [], isLoading } = useQuery({
+    queryKey: ['devices'],
+    queryFn: () => devicesApi.getAll(),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-surface">
+        <span className="material-symbols-outlined text-4xl animate-spin text-primary">
+          progress_activity
+        </span>
+      </div>
+    );
+  }
+
+  const found = devices.find((d) => d.deviceUid === deviceUid);
+  if (found?.deviceType === 'SMART_CURTAIN') {
+    return <Navigate to={`/monitoring/smart-curtain/${deviceUid}`} replace />;
+  }
+  if (found?.deviceType === 'EXHAUST_FAN') {
+    return <Navigate to={`/monitoring/exhaust-fan/${deviceUid}`} replace />;
+  }
+
   return <Navigate to={`/monitoring/temp-humidity/${deviceUid}`} replace />;
 };
 
@@ -65,6 +92,7 @@ export const AppRouter: React.FC = () => {
           <Route path="monitoring" element={<DeviceMonitoringPage />} />
           <Route path="monitoring/temp-humidity/:deviceUid" element={<TempHumidityMonitoringPage />} />
           <Route path="monitoring/exhaust-fan/:deviceUid" element={<ExhaustFanMonitoringPage />} />
+          <Route path="monitoring/smart-curtain/:deviceUid" element={<SmartCurtainMonitoringPage />} />
           <Route path="monitoring/:deviceUid" element={<DeviceMonitoringRedirect />} />
 
           {/* Manajemen Group */}

@@ -216,11 +216,8 @@ export class FirmwareService {
       },
     });
 
-    // 2. Construct OTA download URL (supports separate backend server from MQTT broker)
-    const baseUrl =
-      process.env.BACKEND_URL?.trim() ||
-      hostUrl ||
-      `http://localhost:${process.env.PORT || 3000}`;
+    // 2. Construct OTA download URL (resolves host/IP so ESP node doesn't receive localhost)
+    const baseUrl = this.resolveBaseUrl(hostUrl);
     const downloadUrl = `${baseUrl.replace(/\/+$/, '')}/api/firmware/${firmwareId}/download`;
 
     // 3. Dispatch OTA update command via MQTT
@@ -449,5 +446,25 @@ export class FirmwareService {
       message: `Firmware v${firmware.version} deleted successfully`,
       id: firmwareId,
     };
+  }
+
+  /**
+   * Resolves the HTTP base URL for firmware OTA binary downloads.
+   * Directly uses process.env.BACKEND_URL configured in backend/.env.
+   */
+  private resolveBaseUrl(hostUrl?: string): string {
+    const envUrl = process.env.BACKEND_URL?.trim();
+    if (envUrl) {
+      return envUrl;
+    }
+
+    const fallbackUrl = hostUrl || `http://localhost:${process.env.PORT || 3000}`;
+    if (/localhost|127\.0\.0\.1/i.test(fallbackUrl)) {
+      this.logger.warn(
+        `BACKEND_URL is not configured in backend/.env. Using '${fallbackUrl}'. ESP nodes may fail OTA download if localhost is sent. Please set BACKEND_URL in backend/.env (e.g. BACKEND_URL=http://<SERVER_IP>:3000)`,
+      );
+    }
+
+    return fallbackUrl;
   }
 }
