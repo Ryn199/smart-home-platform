@@ -11,7 +11,7 @@
 // 2. Default MQTT Broker Configuration (Used when EEPROM is uninitialized)
 #define MQTT_BROKER     "202.10.41.155"   // IP Address or Hostname of MQTT Broker
 #define MQTT_PORT       1883
-#define MQTT_USER       "mqttuser"        // Leave blank if no auth
+#define MQTT_USER       "smarthome"        // Leave blank if no auth
 #define MQTT_PASSWORD   "11191205"        // Leave blank if no auth
 
 // 3. Hardware Authentication (Pairing Code)
