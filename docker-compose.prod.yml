@@ -43,6 +43,8 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL:-postgresql://smarthome:smarthome_secret@postgres:5432/smarthome_db?schema=public}
       MQTT_BROKER_URL: ${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:-change_this_to_a_secure_jwt_secret_key}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
