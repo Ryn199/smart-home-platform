@@ -42,17 +42,17 @@ services:
     container_name: smarthome_backend
     restart: always
     environment:
-      PORT: ${PORT:-3000}
+      PORT: 3000
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL:-postgresql://smarthome:smarthome_secret@postgres:5432/smarthome_db?schema=public}
       MQTT_BROKER_URL: ${MQTT_BROKER_URL:-mqtt://mosquitto:1883}
       JWT_SECRET: ${JWT_SECRET:-change_this_to_a_secure_jwt_secret_key}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
       BACKEND_URL: ${BACKEND_URL}
       DEVICE_OFFLINE_THRESHOLD_SECONDS: ${DEVICE_OFFLINE_THRESHOLD_SECONDS:-60}
     ports:
-      - "${PORT:-3000}:3000"
+      - "${BACKEND_PORT:-${PORT:-3000}}:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,7 +67,7 @@ services:
     container_name: smarthome_web_admin
     restart: always
     ports:
-      - "8080:80"
+      - "${WEB_ADMIN_PORT:-8080}:80"
     depends_on:
       - backend
 
